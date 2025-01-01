@@ -1,0 +1,190 @@
+/* Watchlist Section */
+.watchlist-section {
+  margin-top: 120px;
+  padding: 20px;
+  background-color: #111;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+.watchlist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  color: white;
+}
+
+.watchlist-header h2 {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.watchlist-header .search-bar {
+  width: 300px;
+  padding: 10px;
+  border: 1px solid #333;
+  border-radius: 5px;
+  background-color: #222;
+  color: white;
+}
+
+.watchlist-header .search-bar::placeholder {
+  color: #888;
+}
+
+.watchlist-message {
+  text-align: center;
+  color: white;
+  font-size: 18px;
+  margin-top: 50px;
+}
+
+.watchlist-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 30px;
+}
+
+.watchlist-table th,
+.watchlist-table td {
+  padding: 15px;
+  border: 1px solid #333;
+  text-align: center;
+  color: white;
+}
+
+.watchlist-table th {
+  background-color: #333;
+  font-size: 18px;
+}
+
+.watchlist-table td {
+  font-size: 16px;
+}
+
+.watchlist-table tr:hover {
+  background-color: #222;
+  cursor: pointer;
+}
+
+.watchlist-table .remove-button {
+  background-color: #e74c3c;
+  color: white;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.watchlist-table .remove-button:hover {
+  background-color: #c0392b;
+}
+
+/* Chart Section below the Watchlist */
+.watchlist-chart-container {
+  margin-top: 50px;
+  padding: 20px;
+  background-color: #111;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+  height: 400px;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  color: white;
+}
+
+.chart-time-frame-options button {
+  background: none;
+  border: none;
+  padding: 10px 15px;
+  font-size: 16px;
+  cursor: pointer;
+  color: #fefefe;
+  text-transform: uppercase;
+}
+
+.chart-time-frame-options button.selected {
+  border-bottom: 2px solid #8ae422;
+  color: #8ae422;
+}
+
+/* Login to view Watchlist - Non-logged-in user message */
+.watchlist-message.login-required {
+  font-size: 20px;
+  color: white;
+  text-align: center;
+  margin-top: 50px;
+}
+
+/* Stock Add to Watchlist Button */
+.add-to-watchlist-button {
+  background-color: #8ae422;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.add-to-watchlist-button:hover {
+  background-color: #7ba52b;
+}
+
+.search-results {
+  position: absolute;
+  background-color: white;
+  border: 1px solid #ccc;
+  max-height: 200px;
+  overflow-y: auto;
+  width: 100%;
+  z-index: 10;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  margin-top: 5px;
+}
+
+.search-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.search-results li {
+  padding: 8px;
+  cursor: pointer;
+}
+
+.search-results li:hover {
+  background-color: #f1f1f1;
+}
+.dropdown {
+  position: absolute;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+.dropdown-menu {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.dropdown-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.dropdown-item:hover {
+  background: #f5f5f5;
+}
+

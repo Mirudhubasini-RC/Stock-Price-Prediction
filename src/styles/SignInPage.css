@@ -1,0 +1,180 @@
+/* SignInPage.css */
+
+/* Background */
+.signin-container {
+  display: flex;
+  justify-content: space-between; /* Align the form and image side by side */
+  align-items: center;
+  height: 100vh;
+  background-color: #000000;
+  background-size: cover; /* Cover the entire container */
+  background-position: center center; /* Center the background */
+  background-attachment: fixed; /* Fix the background during scroll */
+  background-repeat: no-repeat; /* Avoid background repeat */
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+  padding: 0 50px; /* Adjust space around content */
+  flex-wrap: nowrap; /* Avoid wrapping until needed */
+}
+
+
+.form-container {
+  background: #f9f9f9;
+  padding: 2rem;
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+  width: 35%; /* Fixed width for consistency */
+  height: 500px;
+  box-shadow: 3px 4px 20px #8ae422;
+  transition: all 0.3s ease; /* Smooth transition for forms */
+  
+  margin-left: 180px;
+}
+
+.logo_icon{
+  height : 100px;
+}
+
+.top-logo{
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* Center contents vertically */
+  align-items: center;    /* Center contents horizontally */
+}
+
+.signin-container .form-container .logo {
+  width: 200px;
+  height: auto; /* Maintain aspect ratio */
+  margin-bottom: 1rem; /* Optional spacing */
+}
+
+
+/* Image Container */
+.image-container {
+  background: #1e1e2f; /* Optional: Add a background color for contrast */
+  width: 40%; /* Take up 50% of the width */
+  height: 565px; /* Same height as .form-container */
+  display: flex;
+  justify-content: center;
+  align-items: center; /* Vertically and horizontally center the image */
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+  margin-right: 180px;
+  box-shadow: 0px 2px 20px #8ae422;
+}
+
+/* Maintain Image Aspect Ratio */
+.image-container img {
+  width: 100%; /* Make image width responsive */
+  height: 100%; /* Make image height responsive */
+  object-fit: cover; /* Cover ensures the image fills the container while maintaining aspect ratio */
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
+h2 {
+  text-align: center;
+  margin-bottom: 1rem;
+  color: #87cb38; /* Accent color */
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  color:#1e1e2f
+}
+
+input {
+  width: 95%;
+  padding: 0.8rem;
+  border: 0.5px solid rgb(193, 193, 193);
+  border-radius: 4px;
+  background: #f5f4f4;
+  color: #1e1e2f;
+  outline: none;
+  font-size: 1rem;
+}
+
+input::placeholder {
+  color: #666671;
+}
+
+.btn {
+  width: 100%;
+  padding: 0.8rem;
+  background: #87cb38;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #8ae422;
+}
+
+/* Toggle Link */
+.toggle-link {
+  text-align: center;
+  margin-top: 1rem;
+  cursor: pointer;
+  color: #1884ef;
+  font-size: 0.9rem;
+}
+
+.toggle-link:hover {
+  text-decoration: none;
+}
+
+/* Text Overlay */
+.text-overlay {
+  position: absolute; /* Position it over the image */
+  color: white; /* Text color */
+  font-size: 1.5rem; /* Adjust font size */
+  font-weight: bold;
+  text-align: center;
+  text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.7); /* Add a shadow to make the text stand out */
+  z-index: 2; /* Ensure the text is above the image */
+}
+
+/* Media Query for Smaller Screens */
+@media (max-width: 1024px) {
+  .signin-container {
+    padding: 0 30px; /* Less padding on smaller screens */
+  }
+}
+
+@media (max-width: 768px) {
+  .signin-container {
+    flex-direction: column; /* Stack form and image on small screens */
+    justify-content: center;
+    align-items: center; /* Center-align both */
+  }
+
+  .form-container, .image-container {
+    width: 80%; /* Let both sections use most of the screen width */
+    height: auto; /* Adjust height based on content */
+  }
+
+  .image-container img {
+    width: 100%; /* Ensure image is responsive */
+    height: auto; /* Adjust height automatically */
+  }
+}
+
+@media (max-width: 480px) {
+  .form-container {
+    width: 90%; /* Form takes more width */
+  }
+
+  .image-container {
+    width: 100%; /* Image takes full width */
+    height: 300px; /* Adjust the height */
+  }
+}
