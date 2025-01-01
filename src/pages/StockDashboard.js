@@ -202,7 +202,7 @@ const handleLogout = () => {
         ) : (
           <div>
             <img
-              src={userIcon} 
+              src={user_icon} 
               alt="User" 
               className="user-icon"
               onClick={toggleProfile} 

@@ -1,95 +1,279 @@
-/* Watchlist Section */
-.watchlist-section {
-  margin-top: 120px;
-  padding: 20px;
-  background-color: #111;
-  border-radius: 10px;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+body {
+  font-family: Arial, sans-serif;
+  margin: 50px;
+  background-color: #000;
+  color: white;
+  padding : 10px;
 }
-
-.watchlist-header {
+.search-area{
+  margin-top: 1000px;
+}
+/* Hamburger Menu Icon (3 bars) */
+.hamburger-menu {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  color: white;
-}
-
-.watchlist-header h2 {
-  font-size: 24px;
-  font-weight: bold;
-}
-
-.watchlist-header .search-bar {
-  width: 300px;
-  padding: 10px;
-  border: 1px solid #333;
-  border-radius: 5px;
-  background-color: #222;
-  color: white;
-}
-
-.watchlist-header .search-bar::placeholder {
-  color: #888;
-}
-
-.watchlist-message {
-  text-align: center;
-  color: white;
-  font-size: 18px;
-  margin-top: 50px;
-}
-
-.watchlist-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 30px;
-}
-
-.watchlist-table th,
-.watchlist-table td {
-  padding: 15px;
-  border: 1px solid #333;
-  text-align: center;
-  color: white;
-}
-
-.watchlist-table th {
-  background-color: #333;
-  font-size: 18px;
-}
-
-.watchlist-table td {
-  font-size: 16px;
-}
-
-.watchlist-table tr:hover {
-  background-color: #222;
+  flex-direction: column;
+  gap: 5px;
   cursor: pointer;
+  border: none;
+  background: none;
+  margin-right:18px;
 }
 
-.watchlist-table .remove-button {
-  background-color: #e74c3c;
+.bar {
+  width: 25px;
+  height: 3px;
+  background-color: #fff;
+  border-radius: 5px;
+}
+
+/* Hamburger Menu Links */
+.hamburger-links {
+  position: absolute;
+  top: 80px;
+  right: 20px;
+  background-color: #333;
+  padding: 10px;
+  border-radius: 5px;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+}
+
+.hamburger-links .nav-link {
+  display: block;
+  padding: 10px;
   color: white;
-  padding: 5px 10px;
+  font-size: 18px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.hamburger-links .nav-link:hover {
+  color: #2ac935;
+}
+
+/* User/Profile Section */
+.user-icon {
+  width: 35px;
+  height: 35px;
+  cursor: pointer;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Profile Info Pop-up */
+.user-info {
+  position: absolute;
+  top: 60px; /* Adjusted to bring the entire pop-up slightly higher */
+  right: 20px;
+  background-color: #333;
+  padding: 15px; /* Increased padding for better spacing */
+  border-radius: 5px;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+  width: 200px;
+  display: flex;
+  flex-direction: column; /* Align items vertically */
+  align-items: center; /* Center items horizontally */
+}
+
+/* Username styling */
+.username {
+  color: white;
+  margin: 10px 0 15px; /* Adjusted margins to provide consistent spacing */
+  font-size: 16px;
+  display: flex;
+  align-items: center; /* Center icon and text vertically */
+  justify-content: center; /* Center icon and text horizontally */
+  text-align: center; /* Ensure text stays in the center */
+}
+
+
+.logout-button {
+  width: 100%;
+  padding: 10px;
+  background-color: #8ae422;
+  color: white;
   border: none;
   border-radius: 5px;
   cursor: pointer;
   transition: background-color 0.3s ease;
 }
 
-.watchlist-table .remove-button:hover {
-  background-color: #c0392b;
+.logout-button:hover {
+  background-color: #b53947;
 }
 
-/* Chart Section below the Watchlist */
-.watchlist-chart-container {
-  margin-top: 50px;
+/* Login Button */
+.login-button {
+  padding: 10px 20px;
+  background-color: #8ae422;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.login-button:hover {
+  background-color: #555;
+}
+
+/* Header Styling */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center; /* Align items vertically centered */
+  background-color: #222;
+  margin-bottom: 50px;
+  width: 100%;
+  box-sizing: border-box;
+  position : fixed;
+  left : 0;
+  top: 0;
+  height: 80px;
+  padding-right: 20px;
+  z-index: 10;
+}
+
+.dashboard-header * {
+  pointer-events: auto;  /* Ensure clicks go to interactive elements */
+}
+/* Navigation Text Styling */
+.navigation-buttons {
+  display: flex;
+  justify-content: space-between; /* Space out the navigation links */
+  flex-grow: 1;
+}
+
+.nav-link {
+  font-size: 16px;
+  color: white;
+  margin-right: 20px; /* Space between navigation links */
+  cursor: pointer;
+  position: relative;
+  text-decoration: none; /* Remove underline */
+  transition: color 0.3s ease, border-bottom 0.3s ease;
+}
+
+/* Hover effect: green underline */
+.nav-link:hover {
+  color: #8ae422; /* Green text color */
+  border-bottom: 2px solid #8ae422; /* Green underline */
+}
+
+/* Active (clicked) state: green underline stays */
+.nav-link.active {
+  color: #8ae422; /* Green text color */
+  border-bottom: 2px solid #8ae422; /* Green underline */
+}
+
+/* Login Button Styling */
+.header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px; /* Optional: add space between the search bars */
+  width: auto;
+}
+
+.login-button {
+  padding: 10px 20px;
+  margin-right: 10px;;
+  font-size: 16px;
+  cursor: pointer;
+  background-color: #8ae422;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  transition: background-color 0.3s ease;
+}
+
+.login-button:hover {
+  background-color: #555;
+}
+
+
+.header-left {
+  display: flex; /* Arrange items in a row */
+  align-items: center; /* Vertically align items */
+  gap: 8px; /* Add spacing between elements */
+}
+
+.app-icon {
+  width: 100px; /* Set width for the app icon */
+  margin-left: 10px;
+}
+
+.app-name {
+  width: 200px; /* Set appropriate width for the app name graphic */
+}
+
+.market-summary tr:hover,
+.gainers-table tr:hover,
+.losers-table tr:hover {
+  background-color: #222;
+  cursor: pointer;
+}
+
+/* Search input box in Watchlist */
+.summary-search-container {
+  margin-top: 70px;
+  width: 300px;
+  padding: 8px 12px; /* Reduced padding */
+  font-size: 14px; /* Decreased font size */
+  border: 1px solid #333;
+  border-radius: 5px;
+  background-color: #222;
+  color: white;
+  height: 32px; /* Reduced height */
+}
+
+.summary-search-container::placeholder {
+  color: #888;
+}
+
+/* Search Bar Styling */
+.chart-search{
+  padding: 8px;
+  border: 1px solid #333;
+  border-radius: 5px;
+  background-color: #222;
+  color: white;
+  width:250px;
+}
+
+.chart-search::placeholder,
+.summary-search-container::placeholder {
+  color: #888;
+}
+
+/* Market Summary Table */
+.market-summary {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #111;
+  margin-top: 20px;
+  margin-bottom: 100px;
+}
+
+.market-summary th,
+.market-summary td {
+  padding: 10px;
+  border: 1px solid #333;
+}
+
+.market-summary tr:hover {
+  background-color: #222;
+  cursor: pointer;
+}
+
+/* Stock Chart Container */
+.stock-chart-container {
+  margin-top: 20px;
   padding: 20px;
   background-color: #111;
   border-radius: 10px;
   box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
-  height: 400px;
+  height : 400px
 }
 
 .chart-header {
@@ -97,9 +281,8 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
-  color: white;
 }
-
+/* Base style for time frame buttons */
 .chart-time-frame-options button {
   background: none;
   border: none;
@@ -110,81 +293,16 @@
   text-transform: uppercase;
 }
 
+/* Add a green underline to the selected time frame button */
 .chart-time-frame-options button.selected {
-  border-bottom: 2px solid #8ae422;
+  border-bottom: 2px solid #8ae422; /* Green underline for the selected button */
+}
+
+/* Optionally, you can change the color of the text when selected */
+.chart-time-frame-options button.selected {
   color: #8ae422;
 }
-
-/* Login to view Watchlist - Non-logged-in user message */
-.watchlist-message.login-required {
-  font-size: 20px;
-  color: white;
-  text-align: center;
-  margin-top: 50px;
+.selected-row {
+  border: 2px solid #8ae422;
+  background-color: inherit; /* Maintain original background color */
 }
-
-/* Stock Add to Watchlist Button */
-.add-to-watchlist-button {
-  background-color: #8ae422;
-  color: white;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.add-to-watchlist-button:hover {
-  background-color: #7ba52b;
-}
-
-.search-results {
-  position: absolute;
-  background-color: white;
-  border: 1px solid #ccc;
-  max-height: 200px;
-  overflow-y: auto;
-  width: 100%;
-  z-index: 10;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  margin-top: 5px;
-}
-
-.search-results ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.search-results li {
-  padding: 8px;
-  cursor: pointer;
-}
-
-.search-results li:hover {
-  background-color: #f1f1f1;
-}
-.dropdown {
-  position: absolute;
-  z-index: 1000;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  max-height: 200px;
-  overflow-y: auto;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-.dropdown-menu {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.dropdown-item {
-  padding: 8px 16px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.dropdown-item:hover {
-  background: #f5f5f5;
-}
-

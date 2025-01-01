@@ -13,7 +13,7 @@ const port = 8000;  // Port for the server
 
 app.use(cors({
   origin: 'http://localhost:3000',  // Frontend URL
-  methods: ['POST', 'GET'],
+  methods: ['POST', 'GET','DELETE'],
   credentials: true
 }));
 app.use(express.json());
@@ -152,8 +152,10 @@ app.post('/api/logout', (req, res) => {
 });
 
 // Get the user's watchlist
-app.get("/api/watchlist", (req, res) => {
-  const userId = req.query.userId; // Get userId from the query parameter (logged-in user)
+app.get("/api/watchlist/:userId", (req, res) => {
+  const userId = req.params.userId;  // Get userId from URL parameter
+
+  console.log("Received userId:", userId);  // Log the userId
 
   if (!userId) {
     return res.status(400).json({ message: "User ID is required" });
@@ -170,29 +172,66 @@ app.get("/api/watchlist", (req, res) => {
 });
 
 // Add a stock to the user's watchlist
+// Add a stock to the user's watchlist
 app.post("/api/watchlist/add", (req, res) => {
-  const { symbol, name, price, changePercent, userId } = req.body;  // Get the stock data from the request body
+  const { symbol, userId, username } = req.body;
 
-  if (!userId || !symbol || !name || !price || !changePercent) {
+  console.log("Adding to watchlist:", { symbol, userId, username }); // Log the data
+
+  // Validate required fields
+  if (!userId || !symbol || !username) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
+  // Query to insert or update the record
   const query = `
-    INSERT INTO watchlist (symbol, name, price, changePercent, user_id) 
-    VALUES (?, ?, ?, ?, ?) 
-    ON DUPLICATE KEY UPDATE price = ?, changePercent = ?`; // On duplicate, update price and changePercent
-  db.query(
-    query,
-    [symbol, name, price, changePercent, userId, price, changePercent],
-    (err, results) => {
-      if (err) {
-        console.error("Error adding stock to watchlist:", err);
-        return res.status(500).json({ message: "Error adding stock" });
-      }
-      res.status(200).json({ message: "Stock added to watchlist" });
+    INSERT INTO watchlist (symbol, user_id, username) 
+    VALUES (?, ?, ?)
+    ON DUPLICATE KEY UPDATE 
+      username = VALUES(username)
+  `;
+
+  db.query(query, [symbol, userId, username], (err, results) => {
+    if (err) {
+      console.error("Error adding stock to watchlist:", err);
+      return res.status(500).json({ message: "Error adding stock" });
     }
-  );
+    res.status(200).json({ message: "Stock added to watchlist" });
+  });
 });
+
+// Delete a stock from the user's watchlist
+app.delete("/api/watchlist/delete/:userId/:symbol", (req, res) => {
+  const { symbol, userId } = req.params;  // Get symbol and userId from URL params
+
+  console.log("Deleting from watchlist:", { symbol, userId }); // Log the data
+
+  // Validate required fields
+  if (!userId || !symbol) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  // Query to delete the stock from the watchlist
+  const query = `
+    DELETE FROM watchlist 
+    WHERE symbol = ? AND user_id = ?
+  `;
+
+  db.query(query, [symbol, userId], (err, results) => {
+    if (err) {
+      console.error("Error deleting stock from watchlist:", err);
+      return res.status(500).json({ message: "Error deleting stock" });
+    }
+
+    if (results.affectedRows === 0) {
+      return res.status(404).json({ message: "Stock not found in the watchlist" });
+    }
+
+    res.status(200).json({ message: "Stock deleted from watchlist" });
+  });
+});
+
+
 
 
 app.get('/api/stocks/:symbol', async (req, res) => {
