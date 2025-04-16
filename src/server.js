@@ -1,6 +1,7 @@
 const express = require('express');
 const session = require('express-session');
-require('dotenv').config(); // Adjust the path to your .env file location
+require('dotenv').config({ path: '../.env' }); // Go up one level to find .env
+ // Adjust the path to your .env file location
 
 const bcrypt = require('bcryptjs');
 const yahooFinance = require('yahoo-finance2').default;
@@ -9,7 +10,7 @@ const mysql = require('mysql2');
 const sessionSecret = process.env.SECRET_KEY;
 console.log('SESSION_SECRET:', sessionSecret); 
 const app = express();
-const port = 8000;  // Port for the server
+const port = 8001;  // Port for the server
 
 app.use(cors({
   origin: 'http://localhost:3000',  // Frontend URL
@@ -231,142 +232,121 @@ app.delete("/api/watchlist/delete/:userId/:symbol", (req, res) => {
   });
 });
 
-
-
-
 app.get('/api/stocks/:symbol', async (req, res) => {
   try {
-    const symbol = req.params.symbol;  // Get the stock symbol from the URL
+    const symbol = req.params.symbol;
     console.log(`Fetching stock data for symbol: ${symbol}`);
 
-    // Fetch stock data for the provided symbol
+    // Fetch stock data from Yahoo Finance
     const result = await yahooFinance.quoteSummary(symbol, { modules: ['price', 'summaryDetail'] });
 
-    // Extract the price and percentage change
-    const price = result.price.regularMarketPrice; // Stock price
-    const percentChange = result.price.regularMarketChangePercent; // Percentage change
-    console.log(`Stock Price: ${price}, Percentage Change: ${percentChange}`);
-
-    // Check if the data exists and return the result
-    if (price && percentChange !== undefined) {
-      console.log(`Returning data for symbol: ${symbol}`);
-      res.json({
-        symbol: symbol,
-        price: price,
-        percentChange: percentChange
-      });
-    } else {
+    if (!result || !result.price) {
       console.log(`Data not found for symbol: ${symbol}`);
-      res.status(404).json({ error: 'Data not found for the given symbol' });
+      return res.status(404).json({ error: 'Data not found for the given symbol' });
     }
+
+    // Extract stock details
+    const stockData = {
+      symbol: symbol,
+      companyName: result.price.longName || result.price.shortName || "N/A", // Company name
+      currentPrice: result.price.regularMarketPrice || "N/A", // Current stock price
+      previousClose: result.price.regularMarketPreviousClose || "N/A", // Previous close price
+      openPrice: result.price.regularMarketOpen || "N/A", // Opening price
+      dayRange: `${result.price.regularMarketDayLow || "N/A"} - ${result.price.regularMarketDayHigh || "N/A"}`, // Day's range
+      volume: result.price.regularMarketVolume || "N/A", // Trading volume
+      percentChange: result.price.regularMarketChangePercent || "N/A" // Percentage change
+    };
+
+    console.log(`Returning data for symbol: ${symbol}`, stockData);
+    res.json(stockData);
+
   } catch (err) {
     console.error("Error fetching stock data:", err.message);
     res.status(500).json({ error: "Unable to fetch stock data. Please try again later." });
   }
 });
 
+// Start the server
+const PORT = process.env.PORT || 8000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
-
-// Endpoint to fetch historical stock data
 app.get('/api/stock/:symbol/historical', async (req, res) => {
   const { symbol } = req.params;
-  const { timeframe } = req.query;  // Use timeframe instead of period
+  const { timeframe } = req.query;
 
-  // Validate timeframe parameter
-  const validTimeFrames = ['1d', '1w', '1mo', '1y'];
+  const validTimeFrames = ['1w', '1mo', '1y'];
   if (!validTimeFrames.includes(timeframe)) {
-    return res.status(400).json({ error: 'Invalid timeframe. Allowed values: 1d, 1w, 1mo, 1y' });
+    return res.status(400).json({ error: 'Invalid timeframe. Allowed values: 1w, 1mo, 1y' });
   }
 
-  // Calculate the start date based on the timeframe
-  let startDate, endDate;
-  switch (timeframe) {
-    case '1d':
-      startDate = new Date();
-      startDate.setDate(startDate.getDate() - 1);  // 1 day ago
-      break;
-    case '1w':
-      startDate = new Date();
-      startDate.setDate(startDate.getDate() - 30);  // Get data for the last month
-      break;
-    case '1mo':
-      startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - 1);  // 1 month ago
-      break;
-    case '1y':
-      startDate = new Date();
-      startDate.setFullYear(startDate.getFullYear() - 1);  // 1 year ago
-      break;
-    default:
-      break;
+  let startDate = new Date();
+  let endDate = new Date();
+
+  // Always fetch at least 1 month of data to extract smaller timeframes
+  if (timeframe === '1y') {
+    startDate.setFullYear(startDate.getFullYear() - 1);
+  } else {
+    startDate.setMonth(startDate.getMonth() - 1);
   }
-  endDate = new Date();
 
-  // Format dates in the appropriate way for Yahoo Finance
-  const startIsoDate = startDate.toISOString().split('T')[0]; // Format to 'yyyy-mm-dd'
-  const endIsoDate = endDate.toISOString().split('T')[0]; // Format to 'yyyy-mm-dd'
+  const startIsoDate = startDate.toISOString().split('T')[0];
+  const endIsoDate = endDate.toISOString().split('T')[0];
 
-  // Fetch daily historical data from Yahoo Finance
   try {
     const historicalData = await yahooFinance.historical(symbol, {
-      period1: startIsoDate,  // Start date (yyyy-mm-dd)
-      period2: endIsoDate,    // End date (yyyy-mm-dd)
+      period1: startIsoDate,
+      period2: endIsoDate,
     });
 
     if (!historicalData || historicalData.length === 0) {
       return res.status(404).json({ error: `No historical data found for symbol: ${symbol} for the timeframe: ${timeframe}` });
     }
 
-    // If timeframe is '1w' (Weekly), aggregate daily data into weekly data
+    // Sort data in ascending order
+    historicalData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+
     if (timeframe === '1w') {
-      const weeklyData = aggregateDataIntoWeeks(historicalData);
-      return res.json(weeklyData);
+      // Return last 5 trading days (raw OHLC)
+      const lastFiveDays = [];
+      const seenDates = new Set();
+
+      for (let i = historicalData.length - 1; i >= 0 && lastFiveDays.length < 5; i--) {
+        const dateStr = new Date(historicalData[i].date).toISOString().split('T')[0];
+        if (!seenDates.has(dateStr)) {
+          lastFiveDays.unshift({
+            date: historicalData[i].date,
+            open: historicalData[i].open,
+            high: historicalData[i].high,
+            low: historicalData[i].low,
+            close: historicalData[i].close,
+          });
+          seenDates.add(dateStr);
+        }
+      }
+
+      if (lastFiveDays.length < 5) {
+        return res.status(404).json({ error: `Not enough trading data found for 1w view.` });
+      }
+
+      return res.json(lastFiveDays);
     }
 
-    res.json(historicalData);
+    if (timeframe === '1mo') {
+      return res.json(historicalData);
+    }
+
+    if (timeframe === '1y') {
+      return res.json(historicalData);
+    }
+
   } catch (error) {
     console.error("Error fetching historical data:", error);
     return res.status(500).json({ error: 'Failed to fetch historical data' });
   }
 });
 
-// Helper function to aggregate daily data into weekly data
-function aggregateDataIntoWeeks(dailyData) {
-  const weeklyData = [];
-  let week = [];
-  let weekStartDate = null;
 
-  // Group data into weeks
-  for (let i = 0; i < dailyData.length; i++) {
-    const day = dailyData[i];
-    if (i % 5 === 0) { // Start of a new week (assuming 5 trading days per week)
-      if (week.length) {
-        // Add the aggregate of the previous week (e.g., using the closing price)
-        const avgClosePrice = week.reduce((sum, data) => sum + data.close, 0) / week.length;
-        weeklyData.push({
-          weekStartDate,
-          avgClosePrice,
-        });
-      }
-      // Reset for the new week
-      week = [day];
-      weekStartDate = day.date;
-    } else {
-      week.push(day);
-    }
-  }
-  
-  // For the last week
-  if (week.length) {
-    const avgClosePrice = week.reduce((sum, data) => sum + data.close, 0) / week.length;
-    weeklyData.push({
-      weekStartDate,
-      avgClosePrice,
-    });
-  }
-
-  return weeklyData;
-}
 
 // Endpoint to fetch active gainers and losers dynamically
 app.get('/api/active-stocks', async (req, res) => {

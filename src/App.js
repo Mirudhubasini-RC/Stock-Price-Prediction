@@ -5,6 +5,7 @@ import LoadingPage from "./pages/LoadingPage"; // Displays loading UI
 import StockDashboard from "./pages/StockDashboard"; // Main Stock Dashboard page
 import SignInPage from "./pages/SignInPage"; 
 import Watchlist from "./pages/Watchlist";
+import Prediction from "./pages/Predict";
 const App = () => {
   const [isLoading, setIsLoading] = useState(true);
 
@@ -29,6 +30,7 @@ const App = () => {
         {/* Redirect any unknown routes back to "/" */}
         <Route path="/watchlist" element={<Watchlist />} />
         <Route path="/signin" element={<SignInPage />} /> 
+        <Route path="/prediction" element={<Prediction />} /> 
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>

@@ -65,6 +65,7 @@ const Watchlist = () => {
           const response = await axios.get(
             `http://localhost:8000/api/stock/${selectedStock}/historical?timeframe=${selectedTimeFrame}`
           );
+          console.log("Chart Data Response:", response.data);
           setChartData(response.data);
         } catch (error) {
           console.error("Error fetching chart data:", error);
@@ -79,15 +80,29 @@ const Watchlist = () => {
     console.log(watchlistSymbols);
     try {
       const marketDataResponse = await Promise.all(
-        watchlistSymbols.map((stock) => {
-          return axios.get(`http://localhost:8000/api/stocks/${stock.symbol}`);
-        })
+        watchlistSymbols.map((stock) =>
+          axios.get(`http://localhost:8000/api/stocks/${stock.symbol}`)
+        )
       );
-      setMarketData(marketDataResponse.map((response) => response.data));
+      console.log("Market Data Response:", marketDataResponse.map(res => res.data));
+  
+      setMarketData(
+        marketDataResponse.map((response) => ({
+          symbol: response.data.symbol,
+          companyName: response.data.companyName, // Added company name
+          currentPrice: response.data.currentPrice,
+          previousClose: response.data.previousClose, // Added previous close price
+          openPrice: response.data.openPrice, // Added open price
+          dayRange: response.data.dayRange, // Directly using the API response
+          volume: response.data.volume, // Added volume
+          percentChange: response.data.percentChange, // Added percentage change
+        }))
+      );
     } catch (error) {
       console.error("Error fetching market data:", error);
     }
   };
+  
 
 
   const handleTimeFrameChange = async (timeFrame) => {
@@ -278,10 +293,15 @@ const Watchlist = () => {
           <table className="market-summary">
             <thead>
               <tr>
-                <th>Symbol</th>
-                <th>Price</th>
-                <th>% Change</th>
-                <th>Remove</th>
+              <th>Company Name</th>
+              <th>Symbol</th>
+              <th>Current Price</th>
+              <th>Previous Close</th>
+              <th>Open Price</th>
+              <th>Day's Range</th>
+              <th>Volume</th>
+              <th>% Change</th>
+              <th>Remove</th>
               </tr>
             </thead>
             <tbody>
@@ -295,14 +315,19 @@ const Watchlist = () => {
                       cursor: "pointer",
                     }}
                   >
+                    <td>{stock.companyName}</td>
                     <td>{stock.symbol}</td>
-                    <td>${(stock.price || 0).toFixed(2)}</td>
+                    <td>${(stock.currentPrice || 0).toFixed(2)}</td>
+                    <td>${(stock.previousClose || 0).toFixed(2)}</td>
+                    <td>${(stock.openPrice || 0).toFixed(2)}</td>
+                    <td>{stock.dayRange}</td>
+                    <td>{stock.volume?.toLocaleString()}</td>
                     <td
                       style={{
-                        color: (stock.percentChange * 100 || 0) > 0 ? "green" : "red",
+                        color: (stock.percentChange || 0) > 0 ? "green" : "red",
                       }}
                     >
-                      {(stock.percentChange * 100 || 0).toFixed(2)}%
+                      {Number(stock.percentChange || 0).toFixed(2)}%
                     </td>
                     <td>
                       <button
@@ -330,15 +355,10 @@ const Watchlist = () => {
               <h3 className="card-title">Closing Price Stock Chart</h3>
               {/* Buttons for Time Frame Selection */}
               <div className="chart-time-frame-options">
+                
                 <button
-                  className={`time-frame-btn ${selectedTimeFrame === "1d" ? "selected" : ""}`}
-                  onClick={() => handleTimeFrameChange("1d")}
-                >
-                  1 Day
-                </button>
-                <button
-                  className={`time-frame-btn ${selectedTimeFrame === "1wk" ? "selected" : ""}`}
-                  onClick={() => handleTimeFrameChange("1wk")}
+                  className={`time-frame-btn ${selectedTimeFrame === "1w" ? "selected" : ""}`}
+                  onClick={() => handleTimeFrameChange("1w")}
                 >
                   1 Week
                 </button>

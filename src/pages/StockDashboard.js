@@ -57,18 +57,28 @@ const StockDashboard = () => {
   
   const fetchMarketData = async () => {
     try {
-      const marketDataResponse = await Promise.all(
-        defaultStocks.map((stock) => {
-          return axios.get(`http://localhost:8000/api/stocks/${stock}`);
-        })
-      );
-      setMarketData(marketDataResponse.map((response) => response.data)); // Update the marketData
-    } catch (error) {
-      console.error("Error fetching market data:", error);
-    }
-  };
+        const marketDataResponse = await Promise.all(
+            defaultStocks.map((stock) => {
+                return axios.get(`http://localhost:8000/api/stocks/${stock}`);
+            })
+        );
 
-  
+        console.log("Market Data Response:", marketDataResponse.map(res => res.data)); // Debugging log
+
+        const cleanData = marketDataResponse.map((response) => {
+            return {
+                ...response.data,
+                price: response.data.currentPrice, // Use currentPrice instead of price
+            };
+        });
+
+        setMarketData(cleanData); // Update state with corrected data
+    } catch (error) {
+        console.error("Error fetching market data:", error);
+    }
+};
+
+
   
   
   useEffect(() => {
@@ -97,6 +107,7 @@ const StockDashboard = () => {
     try {
       // Fetch the historical data for the selected time frame
       const historicalDataResponse = await axios.get(`http://localhost:8000/api/stock/${selectedStock}/historical?timeframe=${timeFrame}`);
+      console.log(`Historical data for ${timeFrame}:`, historicalDataResponse.data);
       setChartData(historicalDataResponse.data);
     } catch (error) {
       console.error("Error fetching historical data for time frame:", error);
@@ -241,22 +252,24 @@ const handleLogout = () => {
             </thead>
             <tbody>
             {marketData.slice(0, 8).map((stock, idx) => {
+                const price = stock.currentPrice || 0;
+                const changePercent = stock.percentChange || 0;
+
                 console.log(`Stock: ${stock.symbol}`);
-                console.log(`Full Stock Data:`, stock); 
-                console.log(`Price: ${stock.price}`);
-                console.log(`Price Change Percent: ${stock.percentChange}`);
+                console.log("stock object:", stock);
+                console.log("price:", price);
+                console.log("change percent:", changePercent);
 
                 return (
                   <tr key={idx} onClick={() => setSelectedStock(stock.symbol)}>
                     <td>{stock.symbol}</td>
-                    <td>${(stock.price || 0).toFixed(2)}</td>
+                    <td>${price.toFixed(2)}</td>
                     <td
                       style={{
-                        color:
-                          (stock.percentChange * 100 || 0) > 0 ? "green" : "red",
+                        color: changePercent > 0 ? "green" : "red",
                       }}
                     >
-                      {(stock.percentChange * 100|| 0).toFixed(2)}%
+                      {(changePercent * 100).toFixed(2)}%
                     </td>
                   </tr>
                 );
@@ -269,7 +282,7 @@ const handleLogout = () => {
       {/* Stock Chart Section */}
       <section id="stock-chart" className="stock-chart-section">
         <div className="card-container">
-          <h3 className="card-title">Closing Price Stock Chart</h3>
+          <h3 className="card-title">Stock Chart</h3>
           <input
             type="text"
             placeholder="Search for stocks..."
@@ -279,20 +292,14 @@ const handleLogout = () => {
             onKeyPress={handleKeyPressChart}
           />
 
-                  {/* Buttons for Time Frame Selection */}
+        {/* Buttons for Time Frame Selection */}
         <div className="chart-time-frame-options">
-          <button
-            className={`time-frame-btn ${selectedTimeFrame === "1d" ? "selected" : ""}`}
-            onClick={() => handleTimeFrameChange('1d')}
-          >
-            1 Day
-          </button>
-          <button
-            className={`time-frame-btn ${selectedTimeFrame === "1wk" ? "selected" : ""}`}
-            onClick={() => handleTimeFrameChange('1wk')}
-          >
-            1 Week
-          </button>
+                <button
+                  className={`time-frame-btn ${selectedTimeFrame === "1w" ? "selected" : ""}`}
+                  onClick={() => handleTimeFrameChange("1w")}
+                >
+                1 Week
+                </button>
           <button
             className={`time-frame-btn ${selectedTimeFrame === "1mo" ? "selected" : ""}`}
             onClick={() => handleTimeFrameChange('1mo')}
