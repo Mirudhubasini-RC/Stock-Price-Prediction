@@ -51,3 +51,8 @@ __pycache__/
 *.dylib
 src/Pyth/venv/
 
+# Ignore virtual environment and large files
+src/Pyth/venv/
+src/Pyth/venv/lib/python3.11/site-packages/clang/native/libclang.dylib
+src/Pyth/venv/lib/python3.11/site-packages/tensorflow/libtensorflow_cc.2.dylib
+
