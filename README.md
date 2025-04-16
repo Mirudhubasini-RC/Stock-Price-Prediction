@@ -41,7 +41,7 @@ pillow==9.2.0
 werkzeug==2.2.2
 matplotlib==3.6.2
 gunicorn==20.1.0
----------------------------------------
+
 
 To run the backend :
 activate the venv and move to
