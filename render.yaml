@@ -2,9 +2,9 @@
 # After first deploy, set secrets in the Render dashboard (don't put real keys here).
 
 services:
-  # Express API + React frontend (built static files)
+  # Express API + React frontend → https://ticker-trend.onrender.com
   - type: web
-    name: stock-prediction-web
+    name: ticker-trend
     runtime: node
     plan: free
     rootDir: .
@@ -32,9 +32,9 @@ services:
       - key: DB_NAME
         value: stock_prediction
 
-  # Flask ML prediction API
+  # Flask ML prediction API → https://ticker-trend-ml.onrender.com
   - type: web
-    name: stock-prediction-ml
+    name: ticker-trend-ml
     runtime: python
     plan: free
     rootDir: src/Pyth
