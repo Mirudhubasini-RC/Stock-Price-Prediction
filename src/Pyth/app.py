@@ -99,7 +99,7 @@ def convert_numpy(obj):
 def perform_arima_garch_forecast(stock, horizon):
     if stock not in SUPPORTED_STOCKS:
         return {"error": f"Unsupported stock symbol: {stock}"}
-    
+
     try:
         update_stock_data(stock)
         csv_file = os.path.join(DATA_DIR, f"stock_market_data_{stock}_4years.csv")
@@ -110,7 +110,7 @@ def perform_arima_garch_forecast(stock, horizon):
             return {"error": "Missing required model files."}
 
         df = pd.read_csv(csv_file, parse_dates=["date"])
-        df.set_index("date", inplace=True)  # ✅ Fixed
+        df.set_index("date", inplace=True)
         df.sort_values("date", inplace=True)
         stock_prices = df["close"].astype(float)
 
@@ -124,8 +124,13 @@ def perform_arima_garch_forecast(stock, horizon):
         returns = np.log(stock_prices / stock_prices.shift(1)).dropna()
         garch_forecast = garch_model.forecast(horizon=steps)
 
+        print(f"ARIMA Forecast ({steps} steps):", arima_forecast)
+        print(f"GARCH Forecast (variance - {steps} steps):", garch_forecast.variance.values.tolist())
+
+        forecast_date = datetime.today().date() + timedelta(days=steps)
+
         return {
-            "Date": str(datetime.today().date() + timedelta(days=steps)),
+            "Date": str(forecast_date),
             "Predicted_Close": round(arima_forecast[-1], 2)
         }
     except Exception as e:
@@ -193,7 +198,7 @@ def perform_lstm_forecast(stock, horizon):
         return {"error": f"Exception: {repr(e)}"}
     
 def fetch_news_sentiment(stock):
-    API_KEY = "6P1VJGFWKQKS824B"  # Replace with your actual API key
+    API_KEY = "TUJAIQTRXR1VOQJI"  # Replace with your actual API key
     url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={stock}&apikey={API_KEY}"
 
     try:
@@ -204,35 +209,35 @@ def fetch_news_sentiment(stock):
         if "feed" in data:
             filtered_news = []
             sentiment_scores = []
-            
+
             for article in data["feed"]:
                 tickers = {item["ticker"] for item in article.get("ticker_sentiment", [])}
-                
+
                 if tickers == {stock}:  # Ensure only the selected stock is considered
                     sentiment_score = float(article.get("overall_sentiment_score", 0))
                     sentiment_scores.append(sentiment_score)
-                    
+
                     filtered_news.append({
                         "title": article["title"],
                         "summary": article["summary"],
                         "url": article["url"],
                         "sentiment_score": sentiment_score
                     })
-            
+
             # Calculate average sentiment
             avg_sentiment = round(sum(sentiment_scores) / len(sentiment_scores), 4) if sentiment_scores else 0
-            
+
             # Buy/Sell decision based on sentiment
             decision = "Buy" if avg_sentiment >= 0.2 else "Sell"
-            
+
             return {
                 "average_sentiment": avg_sentiment,
                 "decision": decision,
                 "articles": filtered_news[:5]  # Return top 5 articles
             }
-        
+
         return {"error": "No relevant news found for this stock"}
-    
+
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}
 
@@ -243,13 +248,16 @@ def predict():
     stock = data.get("stock", "AAPL").upper()
     timeframe = data.get("timeframe", "tomorrow")
 
-    news_sentiment = fetch_news_sentiment(stock)
-    decision = news_sentiment.get("decision", "Neutral")  # Extracting only 'decision'
+    news_sentiment_data = fetch_news_sentiment(stock)
+    decision = news_sentiment_data.get("decision", "Neutral")  # Extracting only 'decision'
 
     return jsonify(convert_numpy({
         "arima_garch": perform_arima_garch_forecast(stock, timeframe),
         "lstm": perform_lstm_forecast(stock, timeframe),
-        "decision": decision  # Returning only the decision
+        "decision": decision,
+        "sentiment": news_sentiment_data.get("average_sentiment"), # Return average sentiment
+        "sentiment_decision": news_sentiment_data.get("decision"), # Return sentiment based decision
+        "news_articles": news_sentiment_data.get("articles") # Return top news articles
     }))
 
 
