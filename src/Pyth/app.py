@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import joblib
@@ -11,6 +12,20 @@ import yfinance as yf
 from datetime import datetime, timedelta
 import requests
 
+
+def _load_dotenv():
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
+
+
+_load_dotenv()
 
 app = Flask(__name__)
 CORS(app, resources={r"/predict": {"origins": "http://localhost:3000"}})
@@ -198,8 +213,11 @@ def perform_lstm_forecast(stock, horizon):
         return {"error": f"Exception: {repr(e)}"}
     
 def fetch_news_sentiment(stock):
-    API_KEY = "TUJAIQTRXR1VOQJI"  # Replace with your actual API key
-    url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={stock}&apikey={API_KEY}"
+    api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+    if not api_key:
+        return {"error": "ALPHA_VANTAGE_API_KEY is not set"}
+
+    url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={stock}&apikey={api_key}"
 
     try:
         response = requests.get(url)
