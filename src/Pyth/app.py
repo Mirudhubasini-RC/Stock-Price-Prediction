@@ -95,9 +95,20 @@ class AttentionLayer(tf.keras.layers.Layer):
 
 LSTM_MODEL_PATH = os.path.join(DATA_DIR, "lstm_aro_stock_predictor_AAPL_fixed.h5")
 try:
+    # Models were saved with Lambda layers; Keras 3 blocks that unless opted in.
+    try:
+        import keras
+        keras.config.enable_unsafe_deserialization()
+    except Exception:
+        pass
+
     with custom_object_scope({'AttentionLayer': AttentionLayer}):
-        lstm_model = load_model(LSTM_MODEL_PATH)
-        lstm_model.compile(optimizer="adam", loss="mse", metrics=["mae"])  
+        try:
+            lstm_model = load_model(LSTM_MODEL_PATH, safe_mode=False)
+        except TypeError:
+            # Older TF/Keras without safe_mode kwarg
+            lstm_model = load_model(LSTM_MODEL_PATH)
+        lstm_model.compile(optimizer="adam", loss="mse", metrics=["mae"])
     print("LSTM Model Loaded Successfully")
 except Exception as e:
     raise FileNotFoundError(f"Error loading LSTM model: {e}")
