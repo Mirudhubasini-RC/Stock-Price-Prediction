@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import "/Users/mirudhubasinirc/Documents/Stock Closing Price Prediction/stock-prediction/src/styles/Predict.css";
+import "../styles/Predict.css";
 import logo from "../assets/logo.png";
 import logo_icon from "../assets/logo-icon.png";
 import user_icon from "../assets/user-icon.png";
+import { ML_API_BASE } from "../config";
 
 const stockMetrics = {
   ORCL: { RMSE: 3.7270, MAPE: "1.55%" },
@@ -57,7 +58,7 @@ const Predict = () => {
     const formattedTimeframe = selectedTimeframe.replace("_", " ");
   
     try {
-      const response = await fetch("http://127.0.0.1:3001/predict", {
+      const response = await fetch(`${ML_API_BASE}/predict`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

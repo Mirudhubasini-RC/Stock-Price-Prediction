@@ -28,11 +28,13 @@ def _load_dotenv():
 _load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/predict": {"origins": "http://localhost:3000"}})
+_cors_origin = os.getenv("CORS_ORIGIN", "http://localhost:3000")
+CORS(app, resources={
+    r"/predict": {"origins": _cors_origin},
+    r"/*.json": {"origins": _cors_origin},
+})
 
-
-
-DATA_DIR = os.path.join(os.getcwd(), "data")
+DATA_DIR = str(Path(__file__).resolve().parent / "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 SUPPORTED_STOCKS = ["AAPL", "GOOG", "AMZN", "RYCEY", "ORCL"]
@@ -279,5 +281,18 @@ def predict():
     }))
 
 
+@app.route("/forecast_data.json")
+def forecast_data_file():
+    from flask import send_from_directory
+    return send_from_directory(DATA_DIR, "forecast_data.json")
+
+
+@app.route("/stock_predictions.json")
+def stock_predictions_file():
+    from flask import send_from_directory
+    return send_from_directory(DATA_DIR, "stock_predictions.json")
+
+
 if __name__ == '__main__':
-    app.run(debug=True, port=3001)
+    port = int(os.environ.get("PORT", 3001))
+    app.run(host="0.0.0.0", debug=True, port=port)

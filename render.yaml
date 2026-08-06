@@ -1,0 +1,49 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# After first deploy, set secrets in the Render dashboard (don't put real keys here).
+
+services:
+  # Express API + React frontend (built static files)
+  - type: web
+    name: stock-prediction-web
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm install && npm run build
+    startCommand: node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false
+      - key: REACT_APP_API_URL
+        value: ""
+      - key: REACT_APP_ML_API_URL
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: stock_prediction
+
+  # Flask ML prediction API
+  - type: web
+    name: stock-prediction-ml
+    runtime: python
+    plan: free
+    rootDir: src/Pyth
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -b 0.0.0.0:$PORT app:app --timeout 120
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: ALPHA_VANTAGE_API_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false

@@ -6,6 +6,7 @@ import StockChart from "./StockChart"; // Custom StockChart component
 import logo from "../assets/logo.png";
 import logo_icon from "../assets/logo-icon.png";
 import user_icon from "../assets/user-icon.png";
+import { API_BASE } from "../config";
 
 const Watchlist = () => {
   const [marketData, setMarketData] = useState([]);
@@ -42,7 +43,7 @@ const Watchlist = () => {
         console.log(userId);
         try {
           // Pass the userId (or any relevant user data) to the API
-          const response = await axios.get(`http://localhost:8000/api/watchlist/${userId}`); // Fetch the user's watchlist using the user ID
+          const response = await axios.get(`${API_BASE}/api/watchlist/${userId}`); // Fetch the user's watchlist using the user ID
           setWatchlist(response.data);
   
           // After the watchlist is fetched, now fetch the market data for each stock
@@ -63,7 +64,7 @@ const Watchlist = () => {
       if (selectedStock) {
         try {
           const response = await axios.get(
-            `http://localhost:8000/api/stock/${selectedStock}/historical?timeframe=${selectedTimeFrame}`
+            `${API_BASE}/api/stock/${selectedStock}/historical?timeframe=${selectedTimeFrame}`
           );
           console.log("Chart Data Response:", response.data);
           setChartData(response.data);
@@ -81,7 +82,7 @@ const Watchlist = () => {
     try {
       const marketDataResponse = await Promise.all(
         watchlistSymbols.map((stock) =>
-          axios.get(`http://localhost:8000/api/stocks/${stock.symbol}`)
+          axios.get(`${API_BASE}/api/stocks/${stock.symbol}`)
         )
       );
       console.log("Market Data Response:", marketDataResponse.map(res => res.data));
@@ -110,7 +111,7 @@ const Watchlist = () => {
   
     try {
       // Fetch the historical data for the selected time frame
-      const historicalDataResponse = await axios.get(`http://localhost:8000/api/stock/${selectedStock}/historical?timeframe=${timeFrame}`);
+      const historicalDataResponse = await axios.get(`${API_BASE}/api/stock/${selectedStock}/historical?timeframe=${timeFrame}`);
       setChartData(historicalDataResponse.data);
     } catch (error) {
       console.error("Error fetching historical data for time frame:", error);
@@ -121,7 +122,7 @@ const Watchlist = () => {
       try {
         // Fetch stock details
         const marketDataResponse = await axios.get(
-          `http://localhost:8000/api/stocks/${searchTerm}`
+          `${API_BASE}/api/stocks/${searchTerm}`
         );
         console.log('Market Data Response:', marketDataResponse.data);
     
@@ -154,7 +155,7 @@ const Watchlist = () => {
       return;
     }
     try {
-      const response = await axios.post('http://localhost:8000/api/watchlist/add', {
+      const response = await axios.post(`${API_BASE}/api/watchlist/add`, {
         symbol: stock.symbol,
         username: username,
         userId: userId
@@ -179,7 +180,7 @@ const Watchlist = () => {
       }
   
       const response = await axios.delete(
-        `http://localhost:8000/api/watchlist/delete/${userId}/${stockSymbol}`
+        `${API_BASE}/api/watchlist/delete/${userId}/${stockSymbol}`
       );
   
       // Check for a successful response (based on message content)

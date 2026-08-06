@@ -6,6 +6,7 @@ import "../styles/StockDashboard.css"; // Ensure the path to styles is correct
 import logo from "../assets/logo.png";
 import logo_icon from "../assets/logo-icon.png";
 import user_icon from "../assets/user-icon.png";
+import { API_BASE } from "../config";
 
 
 const StockDashboard = () => {
@@ -20,9 +21,6 @@ const StockDashboard = () => {
   const [searchTermChart, setSearchTermChart] = useState("");
   const [gainers, setGainers] = useState([]);
   const [losers, setLosers] = useState([]);
-  const [defaultStocks] = useState([
-    "AAPL", "AMD", "AMZN", "TSLA", "META", "FANG", "UBER", "MSFT"
-  ]);
   const [isMenuOpen, setIsMenuOpen] = useState(false); // State for toggling the menu
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
@@ -44,54 +42,30 @@ const StockDashboard = () => {
 
 
   // Function to fetch the market data and summaries
-  const fetchActiveStocks = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const activeStocksResponse = await axios.get("http://localhost:8000/api/active-stocks");
-      console.log("Active Stocks Response:", activeStocksResponse.data);
-      setGainers(activeStocksResponse.data.gainers);
-      setLosers(activeStocksResponse.data.losers);
+      const { data } = await axios.get(`${API_BASE}/api/market-overview`);
+      setGainers(data.gainers || []);
+      setLosers(data.losers || []);
+      setMarketData(
+        (data.marketData || []).map((stock) => ({
+          ...stock,
+          price: stock.currentPrice,
+        }))
+      );
     } catch (error) {
-      console.error("Error fetching active stocks:", error);
+      console.error("Error fetching dashboard data:", error);
     }
   };
-  
-  const fetchMarketData = async () => {
-    try {
-        const marketDataResponse = await Promise.all(
-            defaultStocks.map((stock) => {
-                return axios.get(`http://localhost:8000/api/stocks/${stock}`);
-            })
-        );
 
-        console.log("Market Data Response:", marketDataResponse.map(res => res.data)); // Debugging log
-
-        const cleanData = marketDataResponse.map((response) => {
-            return {
-                ...response.data,
-                price: response.data.currentPrice, // Use currentPrice instead of price
-            };
-        });
-
-        setMarketData(cleanData); // Update state with corrected data
-    } catch (error) {
-        console.error("Error fetching market data:", error);
-    }
-};
-
-
-  
-  
   useEffect(() => {
-    // Fetch active stocks (gainers and losers) when the component mounts
-    fetchActiveStocks();
-    // Fetch market data for the default stocks
-    fetchMarketData();
-  }, []); 
+    fetchDashboardData();
+  }, []);
 
   const handleSearchSummary = async () => {
     try {
       // Otherwise, perform search
-      const marketDataResponse = await axios.get(`http://localhost:8000/api/stocks/${searchTermSummary}`);
+      const marketDataResponse = await axios.get(`${API_BASE}/api/stocks/${searchTermSummary}`);
       setMarketData([marketDataResponse.data]);  // Only set this single result
       setIsSearchActive(true);  // Mark search as active
     } catch (error) {
@@ -106,7 +80,7 @@ const StockDashboard = () => {
   
     try {
       // Fetch the historical data for the selected time frame
-      const historicalDataResponse = await axios.get(`http://localhost:8000/api/stock/${selectedStock}/historical?timeframe=${timeFrame}`);
+      const historicalDataResponse = await axios.get(`${API_BASE}/api/stock/${selectedStock}/historical?timeframe=${timeFrame}`);
       console.log(`Historical data for ${timeFrame}:`, historicalDataResponse.data);
       setChartData(historicalDataResponse.data);
     } catch (error) {
@@ -120,14 +94,14 @@ const StockDashboard = () => {
         // If no chart search term entered, set to default stock (e.g., TSLA)
         setSelectedStock("TSLA");
         const defaultChartData = await axios.get(
-          `http://localhost:8000/api/stock/TSLA/historical?timeframe=${selectedTimeFrame}`
+          `${API_BASE}/api/stock/TSLA/historical?timeframe=${selectedTimeFrame}`
         );
         setChartData(defaultChartData.data);
         return;
       }
   
       const response = await axios.get(
-        `http://localhost:8000/api/stock/${searchTermChart}/historical?timeframe=${selectedTimeFrame}`
+        `${API_BASE}/api/stock/${searchTermChart}/historical?timeframe=${selectedTimeFrame}`
       );
   
       if (response.data && Array.isArray(response.data) && response.data.length > 0) {
@@ -150,7 +124,7 @@ const StockDashboard = () => {
     } else if (e.key === "Backspace" && !searchTermSummary.trim()) {
       // If the search term is empty, reset to default stock data
       setSearchTermSummary(""); // Reset the search term
-      fetchMarketData();  // Re-fetch the default stock data
+      fetchDashboardData();  // Re-fetch the default stock data
       setIsSearchActive(false);  // Set search to inactive
     }
   };

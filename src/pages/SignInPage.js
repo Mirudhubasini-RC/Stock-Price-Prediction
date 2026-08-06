@@ -5,6 +5,7 @@ import "../styles/SignInPage.css";
 import Side from "../assets/giphy.webp";
 import logo from "../assets/logo.png";
 import logo_icon from "../assets/logo-icon.png";
+import { API_BASE } from "../config";
 
 const SignInPage = () => {
   const navigate = useNavigate(); // Initialize navigate
@@ -40,8 +41,8 @@ const SignInPage = () => {
     }
 
     const url = isSignUp
-    ? "http://localhost:8000/api/signup"
-    : "http://localhost:8000/api/signin";
+    ? `${API_BASE}/api/signup`
+    : `${API_BASE}/api/signin`;
   
   const data = isSignUp
     ? { username, email, password }

@@ -9,6 +9,9 @@
 # production
 /build
 
+# local deploy notes (keep private)
+DEPLOY.md
+
 # misc
 .DS_Store
 *.log
