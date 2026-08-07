@@ -4,7 +4,7 @@ import "../styles/Predict.css";
 import logo from "../assets/logo.png";
 import logo_icon from "../assets/logo-icon.png";
 import user_icon from "../assets/user-icon.png";
-import { ML_API_BASE } from "../config";
+import { API_BASE } from "../config";
 
 const stockMetrics = {
   ORCL: { RMSE: 3.7270, MAPE: "1.55%" },
@@ -58,7 +58,7 @@ const Predict = () => {
     const formattedTimeframe = selectedTimeframe.replace("_", " ");
   
     try {
-      const response = await fetch(`${ML_API_BASE}/predict`, {
+      const response = await fetch(`${API_BASE}/api/predict`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   Brush
 } from "recharts";
-import { ML_API_BASE } from "../config";
+import { API_BASE } from "../config";
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -38,7 +38,7 @@ const Prediction = () => {
 
   useEffect(() => {
     // Fetch Forecast Data
-    fetch(`${ML_API_BASE}/forecast_data.json`)
+    fetch(`${API_BASE}/api/ml/forecast_data.json`)
       .then((response) => response.json())
       .then((jsonData) => {
         console.log("Forecast Data:", jsonData);
@@ -47,7 +47,7 @@ const Prediction = () => {
       .catch((error) => console.error("Error loading forecast data:", error));
   
     // Fetch Stock Prediction Data
-    fetch(`${ML_API_BASE}/stock_predictions.json`)
+    fetch(`${API_BASE}/api/ml/stock_predictions.json`)
       .then((response) => response.json())
       .then((jsonData) => {
         console.log("Stock Prediction Data:", jsonData);

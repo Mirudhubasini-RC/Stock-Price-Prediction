@@ -691,13 +691,39 @@ app.get('/api/market-overview', async (req, res) => {
   }
 });
 
+// Proxy ML Flask service so the browser always calls same-origin /api/predict
+const ML_SERVICE_URL = (process.env.ML_SERVICE_URL || 'http://127.0.0.1:3001').replace(/\/$/, '');
+
+async function proxyToMl(req, res, mlPath) {
+  try {
+    const upstream = await fetch(`${ML_SERVICE_URL}${mlPath}`, {
+      method: req.method,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: req.method === 'GET' || req.method === 'HEAD' ? undefined : JSON.stringify(req.body || {}),
+    });
+    const text = await upstream.text();
+    const contentType = upstream.headers.get('content-type') || 'application/json';
+    res.status(upstream.status).type(contentType).send(text);
+  } catch (err) {
+    console.error(`ML proxy ${mlPath} failed:`, err.message);
+    res.status(502).json({
+      error: 'Prediction service is waking up or unavailable. Wait ~60s and try again.',
+    });
+  }
+}
+
+app.post('/api/predict', (req, res) => proxyToMl(req, res, '/predict'));
+app.post('/predict', (req, res) => proxyToMl(req, res, '/predict'));
+app.get('/api/ml/forecast_data.json', (req, res) => proxyToMl(req, res, '/forecast_data.json'));
+app.get('/api/ml/stock_predictions.json', (req, res) => proxyToMl(req, res, '/stock_predictions.json'));
+
 // Serve React build in production (Render single web service)
 const buildPath = path.join(__dirname, '..', 'build');
 if (fs.existsSync(buildPath)) {
   console.log('Serving React frontend from', buildPath);
   app.use(express.static(buildPath));
   app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) return next();
+    if (req.path.startsWith('/api') || req.path === '/predict') return next();
     res.sendFile(path.join(buildPath, 'index.html'));
   });
 } else {
@@ -706,4 +732,5 @@ if (fs.existsSync(buildPath)) {
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`ML proxy target: ${ML_SERVICE_URL}`);
 });

@@ -22,7 +22,9 @@ services:
       - key: REACT_APP_API_URL
         value: ""
       - key: REACT_APP_ML_API_URL
-        sync: false
+        value: ""
+      - key: ML_SERVICE_URL
+        value: https://ticker-trend-ml.onrender.com
       - key: ALPHA_VANTAGE_API_KEY
         sync: false
       - key: DB_HOST
