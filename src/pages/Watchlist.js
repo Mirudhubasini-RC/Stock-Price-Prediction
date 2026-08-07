@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import "../styles/Watchlist.css"; // Ensure the path to styles is correct
 import StockChart from "./StockChart"; // Custom StockChart component
+import StatusBlock from "../components/StatusBlock";
 import logo from "../assets/logo.png";
 import logo_icon from "../assets/logo-icon.png";
 import user_icon from "../assets/user-icon.png";
@@ -19,6 +20,11 @@ const Watchlist = () => {
   const [userIcon, setUserIcon] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [loadingWatchlist, setLoadingWatchlist] = useState(false);
+  const [watchlistError, setWatchlistError] = useState("");
+  const [loadingChart, setLoadingChart] = useState(false);
+  const [chartError, setChartError] = useState("");
+  const [searchError, setSearchError] = useState("");
 
   useEffect(() => {
     // Retrieve user info from localStorage
@@ -38,18 +44,22 @@ const Watchlist = () => {
   
         if (!userId) {
           console.error("No user ID found. Cannot fetch watchlist.");
-          return; // Exit if there is no valid user ID
+          setWatchlistError("Could not load watchlist — missing user ID.");
+          return;
         }
-        console.log(userId);
+        setLoadingWatchlist(true);
+        setWatchlistError("");
         try {
-          // Pass the userId (or any relevant user data) to the API
-          const response = await axios.get(`${API_BASE}/api/watchlist/${userId}`); // Fetch the user's watchlist using the user ID
-          setWatchlist(response.data);
-  
-          // After the watchlist is fetched, now fetch the market data for each stock
-          fetchMarketData(response.data); // Assuming this function works with a list of stock symbols
+          const response = await axios.get(`${API_BASE}/api/watchlist/${userId}`);
+          setWatchlist(response.data || []);
+          await fetchMarketData(response.data || []);
         } catch (error) {
           console.error("Error fetching watchlist:", error);
+          setWatchlist([]);
+          setMarketData([]);
+          setWatchlistError("Could not load your watchlist. Please try again.");
+        } finally {
+          setLoadingWatchlist(false);
         }
       };
   
@@ -61,16 +71,23 @@ const Watchlist = () => {
   const [selectedTimeFrame, setSelectedTimeFrame] = useState("1mo"); // Track the selected time frame
   useEffect(() => {
     const fetchChartData = async () => {
-      if (selectedStock) {
-        try {
-          const response = await axios.get(
-            `${API_BASE}/api/stock/${selectedStock}/historical?timeframe=${selectedTimeFrame}`
-          );
-          console.log("Chart Data Response:", response.data);
-          setChartData(response.data);
-        } catch (error) {
-          console.error("Error fetching chart data:", error);
+      if (!selectedStock) return;
+      setLoadingChart(true);
+      setChartError("");
+      try {
+        const response = await axios.get(
+          `${API_BASE}/api/stock/${selectedStock}/historical?timeframe=${selectedTimeFrame}`
+        );
+        setChartData(Array.isArray(response.data) ? response.data : []);
+        if (!Array.isArray(response.data) || response.data.length === 0) {
+          setChartError(`No chart data found for ${selectedStock}.`);
         }
+      } catch (error) {
+        console.error("Error fetching chart data:", error);
+        setChartData([]);
+        setChartError(`Could not load chart for ${selectedStock}.`);
+      } finally {
+        setLoadingChart(false);
       }
     };
   
@@ -78,67 +95,83 @@ const Watchlist = () => {
   }, [selectedStock, selectedTimeFrame]);
 
   const fetchMarketData = async (watchlistSymbols) => {
-    console.log(watchlistSymbols);
+    if (!watchlistSymbols.length) {
+      setMarketData([]);
+      return;
+    }
     try {
       const marketDataResponse = await Promise.all(
         watchlistSymbols.map((stock) =>
           axios.get(`${API_BASE}/api/stocks/${stock.symbol}`)
         )
       );
-      console.log("Market Data Response:", marketDataResponse.map(res => res.data));
   
       setMarketData(
         marketDataResponse.map((response) => ({
           symbol: response.data.symbol,
-          companyName: response.data.companyName, // Added company name
+          companyName: response.data.companyName,
           currentPrice: response.data.currentPrice,
-          previousClose: response.data.previousClose, // Added previous close price
-          openPrice: response.data.openPrice, // Added open price
-          dayRange: response.data.dayRange, // Directly using the API response
-          volume: response.data.volume, // Added volume
-          percentChange: response.data.percentChange, // Added percentage change
+          previousClose: response.data.previousClose,
+          openPrice: response.data.openPrice,
+          dayRange: response.data.dayRange,
+          volume: response.data.volume,
+          percentChange: response.data.percentChange,
         }))
       );
     } catch (error) {
       console.error("Error fetching market data:", error);
+      setMarketData([]);
+      setWatchlistError("Could not load prices for watchlist stocks.");
     }
   };
   
 
 
   const handleTimeFrameChange = async (timeFrame) => {
-    setSelectedTimeFrame(timeFrame); // Update the selected time frame
+    setSelectedTimeFrame(timeFrame);
+    if (!selectedStock) return;
+    setLoadingChart(true);
+    setChartError("");
   
     try {
-      // Fetch the historical data for the selected time frame
       const historicalDataResponse = await axios.get(`${API_BASE}/api/stock/${selectedStock}/historical?timeframe=${timeFrame}`);
-      setChartData(historicalDataResponse.data);
+      setChartData(Array.isArray(historicalDataResponse.data) ? historicalDataResponse.data : []);
     } catch (error) {
       console.error("Error fetching historical data for time frame:", error);
+      setChartData([]);
+      setChartError("Could not load chart data for this timeframe.");
+    } finally {
+      setLoadingChart(false);
     }
   };
 
     const handleSearch = async () => {
+      if (!searchTerm.trim()) return;
+      setSearchError("");
+      setLoadingWatchlist(true);
       try {
-        // Fetch stock details
         const marketDataResponse = await axios.get(
           `${API_BASE}/api/stocks/${searchTerm}`
         );
-        console.log('Market Data Response:', marketDataResponse.data);
     
-        // Add the fetched data to the state directly and check if it exists in the watchlist
-        setMarketData(prevData => [...prevData, marketDataResponse.data]);  // Append to the existing data
+        setMarketData(prevData => {
+          if (prevData.some((s) => s.symbol === marketDataResponse.data.symbol)) {
+            return prevData;
+          }
+          return [...prevData, marketDataResponse.data];
+        });
     
-        // Extract the stock object
         const stock = marketDataResponse.data;
         
-        // Check if stock is already in the watchlist
-        if (!watchlist.some(w => w.symbol === searchTerm)) {  // Use 'some' to check if it's already in the watchlist
-          // Add stock to watchlist if not already present
+        if (!watchlist.some(w => w.symbol === searchTerm)) {
           await handleAddToWatchlist(stock);
+          setWatchlist((prev) => [...prev, { symbol: stock.symbol }]);
         }
       } catch (error) {
         console.error("Error fetching stock data:", error);
+        setSearchError(`Could not find stock "${searchTerm}".`);
+      } finally {
+        setLoadingWatchlist(false);
       }
     };
       
@@ -277,6 +310,7 @@ const Watchlist = () => {
             onChange={(e) => setSearchTerm(e.target.value.toUpperCase())} // Update searchTerm state
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()} // Trigger search on Enter
           />
+          {searchError && <StatusBlock error={searchError} compact />}
         </section>
       </div>
 
@@ -306,12 +340,30 @@ const Watchlist = () => {
               </tr>
             </thead>
             <tbody>
-              {marketData.length > 0 &&
+              {loadingWatchlist ? (
+                <tr>
+                  <td colSpan="9">
+                    <StatusBlock loading loadingText="Loading your watchlist…" compact />
+                  </td>
+                </tr>
+              ) : watchlistError ? (
+                <tr>
+                  <td colSpan="9">
+                    <StatusBlock error={watchlistError} compact />
+                  </td>
+                </tr>
+              ) : marketData.length === 0 ? (
+                <tr>
+                  <td colSpan="9">
+                    <StatusBlock empty emptyText="Your watchlist is empty. Search a symbol to add one." compact />
+                  </td>
+                </tr>
+              ) : (
                 marketData.map((stock, idx) => (
                   <tr
                     key={idx}
-                    onClick={() => setSelectedStock(stock.symbol)} // Update selected stock
-                    className={selectedStock === stock.symbol ? "selected-row" : ""} // Add selected-row class conditionally
+                    onClick={() => setSelectedStock(stock.symbol)}
+                    className={selectedStock === stock.symbol ? "selected-row" : ""}
                     style={{
                       cursor: "pointer",
                     }}
@@ -334,7 +386,7 @@ const Watchlist = () => {
                       <button
                         className="remove-from-watchlist-btn"
                         onClick={(e) => {
-                          e.stopPropagation(); // Prevent row click
+                          e.stopPropagation();
                           handleRemoveFromWatchlist(stock.symbol);
                         }}
                       >
@@ -342,8 +394,8 @@ const Watchlist = () => {
                       </button>
                     </td>
                   </tr>
-
-                ))}
+                ))
+              )}
             </tbody>
           </table>
         </section>
@@ -354,7 +406,6 @@ const Watchlist = () => {
           <section id="stock-chart" className="stock-chart-section">
             <div className="card-container">
               <h3 className="card-title">Closing Price Stock Chart</h3>
-              {/* Buttons for Time Frame Selection */}
               <div className="chart-time-frame-options">
                 
                 <button
@@ -376,20 +427,23 @@ const Watchlist = () => {
                   1 Year
                 </button>
               </div>
-              {/* Render chart data */}
               <div className="chart-container">
-                {chartData.length > 0 ? (
-                  <StockChart data={chartData} /> // Replace with your chart library/component
+                {loadingChart ? (
+                  <StatusBlock loading loadingText="Loading chart…" />
+                ) : chartError ? (
+                  <StatusBlock error={chartError} />
+                ) : chartData.length > 0 ? (
+                  <StockChart data={chartData} />
                 ) : (
-                  <p>Loading chart data...</p>
+                  <StatusBlock empty emptyText="No chart data for this stock." />
                 )}
               </div>
             </div>
           </section>
         </>
-      ) : (
-        <p>Select a stock from your watchlist to view its chart.</p>
-      )}
+      ) : isLoggedIn ? (
+        <StatusBlock empty emptyText="Select a stock from your watchlist to view its chart." />
+      ) : null}
     </div>
   );
 };

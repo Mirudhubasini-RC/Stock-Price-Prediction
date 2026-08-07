@@ -4,6 +4,7 @@ import "../styles/Predict.css";
 import logo from "../assets/logo.png";
 import logo_icon from "../assets/logo-icon.png";
 import user_icon from "../assets/user-icon.png";
+import StatusBlock from "../components/StatusBlock";
 import { API_BASE } from "../config";
 
 const stockMetrics = {
@@ -37,6 +38,7 @@ const Predict = () => {
   const [stockDecision, setStockDecision] = useState(""); 
   const [stockMetricsData, setStockMetricsData] = useState(null); // Store RMSE & MAPE
   const [predictError, setPredictError] = useState("");
+  const [isPredicting, setIsPredicting] = useState(false);
 
   const navigate = useNavigate();
 
@@ -54,6 +56,7 @@ const Predict = () => {
     e.preventDefault();
     setPredictionData(null);
     setPredictError("");
+    setIsPredicting(true);
     setSubmittedTimeframe(selectedTimeframe);
     setStockMetricsData(stockMetrics[selectedStock]); // Set LSTM accuracy for selected stock
 
@@ -82,6 +85,8 @@ const Predict = () => {
     } catch (error) {
       console.error("Error fetching predictions:", error);
       setPredictError(error.message || "Prediction failed. Try again in a minute.");
+    } finally {
+      setIsPredicting(false);
     }
   };
 
@@ -138,15 +143,19 @@ const Predict = () => {
           ))}
         </select>
 
-        <button type="submit" className="button">Predict</button>
-        {predictError && (
-          <p style={{ color: "#ff6b6b", marginTop: "12px", maxWidth: "480px" }}>
-            {predictError}
-          </p>
-        )}
+        <button type="submit" className="button" disabled={isPredicting}>
+          {isPredicting ? "Predicting…" : "Predict"}
+        </button>
       </form>
 
-      {predictionData && (
+      {isPredicting ? (
+        <StatusBlock
+          loading
+          loadingText="Running prediction… Cold starts on free hosting can take up to ~2 minutes."
+        />
+      ) : predictError ? (
+        <StatusBlock error={predictError} />
+      ) : predictionData ? (
         <div className="prediction-container">
           <div className="decision-box">
             <h3>Stock Decision</h3>
@@ -216,6 +225,8 @@ const Predict = () => {
             </div>
           </div>
         </div>
+      ) : (
+        <StatusBlock empty emptyText="Choose a stock and timeframe, then tap Predict to see results." />
       )}
     </div>
   );

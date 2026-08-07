@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import StockChart from "./StockChart"; // Custom StockChart component
+import StatusBlock from "../components/StatusBlock";
 import "../styles/StockDashboard.css"; // Ensure the path to styles is correct
 import logo from "../assets/logo.png";
 import logo_icon from "../assets/logo-icon.png";
@@ -23,6 +24,10 @@ const StockDashboard = () => {
   const [losers, setLosers] = useState([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false); // State for toggling the menu
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [loadingDashboard, setLoadingDashboard] = useState(true);
+  const [dashboardError, setDashboardError] = useState("");
+  const [loadingChart, setLoadingChart] = useState(false);
+  const [chartError, setChartError] = useState("");
 
   const menuRef = useRef(null);
   const profileRef = useRef(null);
@@ -43,6 +48,8 @@ const StockDashboard = () => {
 
   // Function to fetch the market data and summaries
   const fetchDashboardData = async () => {
+    setLoadingDashboard(true);
+    setDashboardError("");
     try {
       const { data } = await axios.get(`${API_BASE}/api/market-overview`);
       setGainers(data.gainers || []);
@@ -55,6 +62,12 @@ const StockDashboard = () => {
       );
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
+      setDashboardError("Could not load market data. Please try again.");
+      setMarketData([]);
+      setGainers([]);
+      setLosers([]);
+    } finally {
+      setLoadingDashboard(false);
     }
   };
 
@@ -63,6 +76,9 @@ const StockDashboard = () => {
   }, []);
 
   const handleSearchSummary = async () => {
+    if (!searchTermSummary.trim()) return;
+    setLoadingDashboard(true);
+    setDashboardError("");
     try {
       // Otherwise, perform search
       const marketDataResponse = await axios.get(`${API_BASE}/api/stocks/${searchTermSummary}`);
@@ -70,6 +86,10 @@ const StockDashboard = () => {
       setIsSearchActive(true);  // Mark search as active
     } catch (error) {
       console.error("Error searching for stock:", error);
+      setDashboardError(`No market data found for ${searchTermSummary}.`);
+      setMarketData([]);
+    } finally {
+      setLoadingDashboard(false);
     }
   };
 
@@ -77,18 +97,27 @@ const StockDashboard = () => {
 
   const handleTimeFrameChange = async (timeFrame) => {
     setSelectedTimeFrame(timeFrame); // Update the selected time frame
+    if (!selectedStock) return;
+    setLoadingChart(true);
+    setChartError("");
   
     try {
       // Fetch the historical data for the selected time frame
       const historicalDataResponse = await axios.get(`${API_BASE}/api/stock/${selectedStock}/historical?timeframe=${timeFrame}`);
       console.log(`Historical data for ${timeFrame}:`, historicalDataResponse.data);
-      setChartData(historicalDataResponse.data);
+      setChartData(Array.isArray(historicalDataResponse.data) ? historicalDataResponse.data : []);
     } catch (error) {
       console.error("Error fetching historical data for time frame:", error);
+      setChartData([]);
+      setChartError("Could not load chart data for this timeframe.");
+    } finally {
+      setLoadingChart(false);
     }
   };
 
   const handleSearchChart = async () => {
+    setLoadingChart(true);
+    setChartError("");
     try {
       if (!searchTermChart) {
         // If no chart search term entered, set to default stock (e.g., TSLA)
@@ -96,7 +125,7 @@ const StockDashboard = () => {
         const defaultChartData = await axios.get(
           `${API_BASE}/api/stock/TSLA/historical?timeframe=${selectedTimeFrame}`
         );
-        setChartData(defaultChartData.data);
+        setChartData(Array.isArray(defaultChartData.data) ? defaultChartData.data : []);
         return;
       }
   
@@ -110,9 +139,14 @@ const StockDashboard = () => {
       } else {
         console.log("No data found for the selected stock.");
         setChartData([]); // Clear chart if no data
+        setChartError(`No chart data found for ${searchTermChart}.`);
       }
     } catch (error) {
       console.error("Error fetching stock chart:", error);
+      setChartData([]);
+      setChartError(`Could not load chart for ${searchTermChart || "this stock"}.`);
+    } finally {
+      setLoadingChart(false);
     }
   };
   
@@ -225,14 +259,28 @@ const handleLogout = () => {
               </tr>
             </thead>
             <tbody>
-            {marketData.slice(0, 8).map((stock, idx) => {
-                const price = stock.currentPrice || 0;
-                const changePercent = stock.percentChange || 0;
-
-                console.log(`Stock: ${stock.symbol}`);
-                console.log("stock object:", stock);
-                console.log("price:", price);
-                console.log("change percent:", changePercent);
+            {loadingDashboard ? (
+              <tr>
+                <td colSpan="3">
+                  <StatusBlock loading loadingText="Loading market summary…" compact />
+                </td>
+              </tr>
+            ) : dashboardError ? (
+              <tr>
+                <td colSpan="3">
+                  <StatusBlock error={dashboardError} compact />
+                </td>
+              </tr>
+            ) : marketData.length === 0 ? (
+              <tr>
+                <td colSpan="3">
+                  <StatusBlock empty emptyText="No market data available." compact />
+                </td>
+              </tr>
+            ) : (
+              marketData.slice(0, 8).map((stock, idx) => {
+                const price = Number(stock.currentPrice) || 0;
+                const changePercent = Number(stock.percentChange) || 0;
 
                 return (
                   <tr key={idx} onClick={() => setSelectedStock(stock.symbol)}>
@@ -247,7 +295,8 @@ const handleLogout = () => {
                     </td>
                   </tr>
                 );
-              })}
+              })
+            )}
             </tbody>
           </table>
         </div>
@@ -288,11 +337,17 @@ const handleLogout = () => {
           </button>
         </div>
 
-        {selectedStock && (
+        {loadingChart ? (
+          <StatusBlock loading loadingText="Loading chart…" />
+        ) : chartError ? (
+          <StatusBlock error={chartError} />
+        ) : selectedStock && chartData.length > 0 ? (
           <div>
-            <h3>{searchTermChart ? `${selectedStock} Chart` : "Search to display"}</h3>
+            <h3>{`${selectedStock} Chart`}</h3>
             <StockChart data={chartData} />
           </div>
+        ) : (
+          <StatusBlock empty emptyText="Search a stock symbol to display its chart." />
         )}
 
         </div>
@@ -311,26 +366,34 @@ const handleLogout = () => {
               </tr>
             </thead>
             <tbody>
-            {gainers.map((stock, idx) => {
-                console.log("stock object:", stock);  // To check the whole stock object
-                console.log("price:", stock.price);  // To check the value of price
-                console.log("change:", stock.change);  // To check the value of change
-                
-                return (
+            {loadingDashboard ? (
+              <tr>
+                <td colSpan="3">
+                  <StatusBlock loading loadingText="Loading gainers…" compact />
+                </td>
+              </tr>
+            ) : gainers.length === 0 ? (
+              <tr>
+                <td colSpan="3">
+                  <StatusBlock empty emptyText="No gainers available right now." compact />
+                </td>
+              </tr>
+            ) : (
+              gainers.map((stock, idx) => (
                   <tr key={idx}>
                     <td>{stock.ticker}</td>
-                    <td>${(stock.price || 0).toFixed(2)}</td>
+                    <td>${(Number(stock.price) || 0).toFixed(2)}</td>
                     <td
                       style={{
                         color:
-                          (stock.change || 0) > 0 ? "green" : "red",
+                          (Number(stock.change) || 0) > 0 ? "green" : "red",
                       }}
                     >
-                      {(stock.change || 0).toFixed(2)}%
+                      {(Number(stock.change) || 0).toFixed(2)}%
                     </td>
                   </tr>
-                );
-              })}
+                ))
+            )}
             </tbody>
           </table>
         </div>
@@ -350,16 +413,30 @@ const handleLogout = () => {
         </tr>
       </thead>
       <tbody>
-        {losers.map((stock, idx) => (
+        {loadingDashboard ? (
+          <tr>
+            <td colSpan="3">
+              <StatusBlock loading loadingText="Loading losers…" compact />
+            </td>
+          </tr>
+        ) : losers.length === 0 ? (
+          <tr>
+            <td colSpan="3">
+              <StatusBlock empty emptyText="No losers available right now." compact />
+            </td>
+          </tr>
+        ) : (
+          losers.map((stock, idx) => (
           <tr key={idx}>
             <td>{stock.ticker}</td>
-            <td>${(stock.price || 0).toFixed(2)}</td>
+            <td>${(Number(stock.price) || 0).toFixed(2)}</td>
             <td style={{ color: 'red' }}>
             {(Number(stock.changePercent || 0).toFixed(2))}%
 
             </td>
           </tr>
-        ))}
+        ))
+        )}
       </tbody>
     </table>
   </div>
