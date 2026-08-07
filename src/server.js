@@ -115,59 +115,95 @@ function historicalFromCsv(symbol, timeframe) {
   }));
 }
 
-function stooqSymbol(symbol) {
-  // Stooq US equities use ticker.us (e.g. aapl.us)
-  return `${String(symbol).toLowerCase()}.us`;
+function yahooRangeForTimeframe(timeframe) {
+  if (timeframe === '1w') return '5d';
+  if (timeframe === '1y') return '1y';
+  return '1mo';
 }
 
-async function fetchStooqHistory(symbol) {
-  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(stooqSymbol(symbol))}&i=d`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Stooq HTTP ${res.status}`);
-  const text = await res.text();
-  if (!text || /No data|Exceeded|forbidden/i.test(text)) {
-    throw new Error('Stooq returned no data');
-  }
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) throw new Error('Stooq empty history');
+/** Direct Yahoo chart API — avoids crumb/cookie rate limits from yahoo-finance2. */
+async function fetchYahooChart(symbol, timeframe = '1mo') {
+  const range = yahooRangeForTimeframe(timeframe);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      Accept: 'application/json',
+    },
+  });
+  if (!res.ok) throw new Error(`Yahoo chart HTTP ${res.status}`);
+  const data = await res.json();
+  const result = data?.chart?.result?.[0];
+  if (!result) throw new Error('Yahoo chart empty');
+
+  const timestamps = result.timestamp || [];
+  const quote = result.indicators?.quote?.[0] || {};
   const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const [date, open, high, low, close] = lines[i].split(',');
-    const o = parseFloat(open);
-    const h = parseFloat(high);
-    const l = parseFloat(low);
-    const c = parseFloat(close);
-    if (!date || Number.isNaN(c)) continue;
-    rows.push({ date, open: o, high: h, low: l, close: c });
+  for (let i = 0; i < timestamps.length; i++) {
+    const close = quote.close?.[i];
+    if (close == null) continue;
+    const d = new Date(timestamps[i] * 1000);
+    rows.push({
+      date: d.toISOString().slice(0, 10),
+      open: quote.open?.[i] ?? close,
+      high: quote.high?.[i] ?? close,
+      low: quote.low?.[i] ?? close,
+      close,
+    });
   }
-  if (!rows.length) throw new Error('Stooq parse failed');
-  return rows;
+  if (!rows.length) throw new Error('Yahoo chart no rows');
+
+  const meta = result.meta || {};
+  return { rows, meta };
 }
 
-function sliceHistory(rows, timeframe) {
-  let count = 22;
-  if (timeframe === '1w') count = 5;
-  if (timeframe === '1y') count = 252;
-  return rows.slice(-count);
-}
-
-async function quoteFromStooq(symbol) {
-  const rows = await fetchStooqHistory(symbol);
-  if (rows.length < 2) throw new Error('Not enough Stooq rows');
+async function quoteFromYahooChart(symbol) {
+  const { rows, meta } = await fetchYahooChart(symbol, '5d');
   const last = rows[rows.length - 1];
-  const prev = rows[rows.length - 2];
-  const changePct = prev.close ? (last.close - prev.close) / prev.close : 0;
+  const prev = rows[rows.length - 2] || last;
+  const price = meta.regularMarketPrice ?? last.close;
+  const prevClose = meta.chartPreviousClose ?? prev.close;
+  const changePct = prevClose ? (price - prevClose) / prevClose : 0;
+  return {
+    symbol,
+    companyName: meta.longName || meta.shortName || symbol,
+    currentPrice: price,
+    previousClose: prevClose,
+    openPrice: last.open,
+    dayRange: `${meta.regularMarketDayLow ?? last.low} - ${meta.regularMarketDayHigh ?? last.high}`,
+    volume: meta.regularMarketVolume ?? 'N/A',
+    percentChange: changePct,
+    price,
+    source: 'yahoo-chart',
+  };
+}
+
+async function quoteFromAlphaVantage(symbol) {
+  if (!ALPHA_VANTAGE_API_KEY) throw new Error('No Alpha Vantage key');
+  const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${ALPHA_VANTAGE_API_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Alpha Vantage HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.Note || data.Information) throw new Error(data.Note || data.Information);
+  const q = data['Global Quote'];
+  if (!q || !q['05. price']) throw new Error('Alpha Vantage empty quote');
+  const price = parseFloat(q['05. price']);
+  const prev = parseFloat(q['08. previous close']);
+  const open = parseFloat(q['02. open']);
+  const high = parseFloat(q['03. high']);
+  const low = parseFloat(q['04. low']);
+  const changePct = parseFloat(String(q['10. change percent'] || '').replace('%', '')) / 100;
   return {
     symbol,
     companyName: symbol,
-    currentPrice: last.close,
-    previousClose: prev.close,
-    openPrice: last.open,
-    dayRange: `${last.low} - ${last.high}`,
-    volume: 'N/A',
-    percentChange: changePct,
-    price: last.close,
-    source: 'stooq',
+    currentPrice: price,
+    previousClose: prev,
+    openPrice: open,
+    dayRange: `${low} - ${high}`,
+    volume: parseFloat(q['06. volume']) || 'N/A',
+    percentChange: Number.isFinite(changePct) ? changePct : 0,
+    price,
+    source: 'alphavantage',
   };
 }
 
@@ -192,7 +228,7 @@ async function fetchAlphaVantageActive() {
   return { gainers, losers, source: 'alphavantage' };
 }
 
-/** Run Yahoo calls one-at-a-time with a gap between them. */
+/** Run Yahoo-finance2 calls one-at-a-time (legacy path). */
 function enqueueYahoo(fn) {
   if (!yahooAvailable()) {
     return Promise.reject(new Error('Too Many Requests'));
@@ -261,23 +297,20 @@ async function fetchQuoteCached(symbol) {
   const hit = getCache(key);
   if (hit) return hit;
 
-  // 1) Yahoo (when not rate-limited)
-  if (yahooAvailable()) {
-    try {
-      const quote = await enqueueYahoo(() => yahooFinance.quote(symbol));
-      if (quote) return setCache(key, mapQuoteToStock(symbol, quote));
-    } catch (err) {
-      if (isRateLimited(err)) markYahooCooldown(symbol);
-      console.warn(`Yahoo quote failed for ${symbol}:`, err.message);
-    }
+  // 1) Direct Yahoo chart API (works when yahoo-finance2 is blocked)
+  try {
+    const q = await quoteFromYahooChart(symbol);
+    return setCache(key, q);
+  } catch (err) {
+    console.warn(`Yahoo chart quote failed for ${symbol}:`, err.message);
   }
 
-  // 2) Stooq (free, no API key) — good live daily prices
+  // 2) Alpha Vantage GLOBAL_QUOTE (uses your key; limited daily calls)
   try {
-    const stooq = await quoteFromStooq(symbol);
-    return setCache(key, stooq);
+    const q = await quoteFromAlphaVantage(symbol);
+    return setCache(key, q);
   } catch (err) {
-    console.warn(`Stooq quote failed for ${symbol}:`, err.message);
+    console.warn(`Alpha Vantage quote failed for ${symbol}:`, err.message);
   }
 
   // 3) Local CSV / static fallback
@@ -532,13 +565,12 @@ app.get('/api/stock/:symbol/historical', async (req, res) => {
   const cached = getCache(cacheKey);
   if (cached) return res.json(cached);
 
-  // Stooq first for fresher charts (CSV in repo ends ~Apr 2025)
+  // Direct Yahoo chart API first (live dates)
   try {
-    const rows = await fetchStooqHistory(symbol);
-    const payload = sliceHistory(rows, timeframe);
-    if (payload.length) return res.json(setCache(cacheKey, payload));
+    const { rows } = await fetchYahooChart(symbol, timeframe);
+    if (rows.length) return res.json(setCache(cacheKey, rows));
   } catch (err) {
-    console.warn(`Stooq history failed for ${symbol}:`, err.message);
+    console.warn(`Yahoo chart history failed for ${symbol}:`, err.message);
   }
 
   const local = historicalFromCsv(symbol, timeframe);
@@ -546,62 +578,7 @@ app.get('/api/stock/:symbol/historical', async (req, res) => {
     return res.json(setCache(cacheKey, local));
   }
 
-  if (!yahooAvailable()) {
-    return res.status(503).json({
-      error: 'No history available for this symbol right now.',
-    });
-  }
-
-  let startDate = new Date();
-  const endDate = new Date();
-  if (timeframe === '1y') {
-    startDate.setFullYear(startDate.getFullYear() - 1);
-  } else {
-    startDate.setMonth(startDate.getMonth() - 1);
-  }
-
-  try {
-    const chart = await enqueueYahoo(() =>
-      yahooFinance.chart(symbol, {
-        period1: startDate.toISOString().split('T')[0],
-        period2: endDate.toISOString().split('T')[0],
-        interval: '1d',
-      })
-    );
-
-    const quotes = (chart && chart.quotes) || [];
-    const historicalData = quotes
-      .filter((q) => q && q.close != null)
-      .map((q) => ({
-        date: q.date,
-        open: q.open,
-        high: q.high,
-        low: q.low,
-        close: q.close,
-      }));
-
-    if (!historicalData.length) {
-      return res.status(404).json({
-        error: `No historical data found for symbol: ${symbol} for the timeframe: ${timeframe}`,
-      });
-    }
-
-    let payload = historicalData;
-    if (timeframe === '1w') {
-      payload = historicalData.slice(-5);
-      if (payload.length < 5) {
-        return res.status(404).json({ error: 'Not enough trading data found for 1w view.' });
-      }
-    }
-
-    return res.json(setCache(cacheKey, payload));
-  } catch (error) {
-    if (isRateLimited(error)) markYahooCooldown('historical');
-    const stale = getStaleCache(cacheKey);
-    if (stale) return res.json(stale);
-    console.error('Error fetching historical data:', error.message || error);
-    return res.status(500).json({ error: 'Failed to fetch historical data' });
-  }
+  return res.status(503).json({ error: 'No history available for this symbol right now.' });
 });
 
 async function buildActiveStocks() {
