@@ -36,6 +36,7 @@ const Predict = () => {
   const [username, setUsername] = useState("User");
   const [stockDecision, setStockDecision] = useState(""); 
   const [stockMetricsData, setStockMetricsData] = useState(null); // Store RMSE & MAPE
+  const [predictError, setPredictError] = useState("");
 
   const navigate = useNavigate();
 
@@ -52,6 +53,7 @@ const Predict = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setPredictionData(null);
+    setPredictError("");
     setSubmittedTimeframe(selectedTimeframe);
     setStockMetricsData(stockMetrics[selectedStock]); // Set LSTM accuracy for selected stock
 
@@ -65,12 +67,13 @@ const Predict = () => {
         },
         body: JSON.stringify({ stock: selectedStock, timeframe: formattedTimeframe }),
       });
+
+      const data = await response.json().catch(() => ({}));
   
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+        throw new Error(data.error || `HTTP error! Status: ${response.status}`);
       }
   
-      const data = await response.json();
       console.log("Received Prediction Data:", data);
   
       setPredictionData(data);
@@ -78,6 +81,7 @@ const Predict = () => {
   
     } catch (error) {
       console.error("Error fetching predictions:", error);
+      setPredictError(error.message || "Prediction failed. Try again in a minute.");
     }
   };
 
@@ -135,6 +139,11 @@ const Predict = () => {
         </select>
 
         <button type="submit" className="button">Predict</button>
+        {predictError && (
+          <p style={{ color: "#ff6b6b", marginTop: "12px", maxWidth: "480px" }}>
+            {predictError}
+          </p>
+        )}
       </form>
 
       {predictionData && (

@@ -692,24 +692,51 @@ app.get('/api/market-overview', async (req, res) => {
 });
 
 // Proxy ML Flask service so the browser always calls same-origin /api/predict
-const ML_SERVICE_URL = (process.env.ML_SERVICE_URL || 'http://127.0.0.1:3001').replace(/\/$/, '');
+const ML_SERVICE_URL = (
+  process.env.ML_SERVICE_URL
+  || (process.env.NODE_ENV === 'production'
+    ? 'https://ticker-trend-ml.onrender.com'
+    : 'http://127.0.0.1:3001')
+).replace(/\/$/, '');
 
 async function proxyToMl(req, res, mlPath) {
-  try {
-    const upstream = await fetch(`${ML_SERVICE_URL}${mlPath}`, {
-      method: req.method,
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: req.method === 'GET' || req.method === 'HEAD' ? undefined : JSON.stringify(req.body || {}),
-    });
-    const text = await upstream.text();
-    const contentType = upstream.headers.get('content-type') || 'application/json';
-    res.status(upstream.status).type(contentType).send(text);
-  } catch (err) {
-    console.error(`ML proxy ${mlPath} failed:`, err.message);
-    res.status(502).json({
-      error: 'Prediction service is waking up or unavailable. Wait ~60s and try again.',
-    });
+  const url = `${ML_SERVICE_URL}${mlPath}`;
+  const maxAttempts = 2;
+  let lastErr = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`ML proxy ${mlPath} → ${url} (attempt ${attempt}/${maxAttempts})`);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 110000); // under gunicorn 120s
+      const upstream = await fetch(url, {
+        method: req.method,
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: req.method === 'GET' || req.method === 'HEAD' ? undefined : JSON.stringify(req.body || {}),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      const text = await upstream.text();
+      const contentType = upstream.headers.get('content-type') || 'application/json';
+      if (!upstream.ok) {
+        console.warn(`ML upstream ${upstream.status}:`, text.slice(0, 300));
+      }
+      return res.status(upstream.status).type(contentType).send(text);
+    } catch (err) {
+      lastErr = err;
+      console.error(`ML proxy ${mlPath} attempt ${attempt} failed:`, err.message);
+      if (attempt < maxAttempts) {
+        await sleep(3000); // give free-tier cold start a moment
+      }
+    }
   }
+
+  res.status(502).json({
+    error: 'Prediction service is waking up or unavailable. Open ticker-trend-ml once, wait ~60s, then try Predict again.',
+    detail: lastErr ? String(lastErr.message || lastErr) : undefined,
+    target: ML_SERVICE_URL,
+  });
 }
 
 app.post('/api/predict', (req, res) => proxyToMl(req, res, '/predict'));
