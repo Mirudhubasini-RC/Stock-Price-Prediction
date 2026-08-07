@@ -230,9 +230,13 @@ db.connect((err) => {
   console.log('Connected to MySQL database.');
 });
 
-// Welcome endpoint
+// Welcome / SPA root — prefer React build when present
 app.get('/', (req, res) => {
-  res.send('Welcome to the stock prediction server');
+  const indexHtml = path.join(__dirname, '..', 'build', 'index.html');
+  if (fs.existsSync(indexHtml)) {
+    return res.sendFile(indexHtml);
+  }
+  res.send('Welcome to the stock prediction server (React build not found — run npm run build)');
 });
 
 // Sign-up endpoint
@@ -626,11 +630,14 @@ app.get('/api/market-overview', async (req, res) => {
 // Serve React build in production (Render single web service)
 const buildPath = path.join(__dirname, '..', 'build');
 if (fs.existsSync(buildPath)) {
+  console.log('Serving React frontend from', buildPath);
   app.use(express.static(buildPath));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
     res.sendFile(path.join(buildPath, 'index.html'));
   });
+} else {
+  console.warn('React build folder not found at', buildPath, '- run: npm run build');
 }
 
 app.listen(PORT, () => {
