@@ -39,51 +39,133 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 SUPPORTED_STOCKS = ["AAPL", "GOOG", "AMZN", "RYCEY", "ORCL"]
 
+
+def fetch_yahoo_chart_daily(symbol, range_="1y"):
+    """Live daily OHLCV via Yahoo chart API (avoids yfinance crumb rate limits)."""
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        f"?range={range_}&interval=1d"
+    )
+    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+    resp.raise_for_status()
+    payload = resp.json()
+    result = (payload.get("chart") or {}).get("result") or []
+    if not result:
+        raise RuntimeError("Yahoo chart returned no result")
+    result = result[0]
+    timestamps = result.get("timestamp") or []
+    quote = ((result.get("indicators") or {}).get("quote") or [{}])[0]
+    rows = []
+    for i, ts in enumerate(timestamps):
+        close = (quote.get("close") or [None])[i]
+        if close is None:
+            continue
+        rows.append({
+            "date": datetime.utcfromtimestamp(ts).date(),
+            "open": float((quote.get("open") or [close])[i] or close),
+            "high": float((quote.get("high") or [close])[i] or close),
+            "low": float((quote.get("low") or [close])[i] or close),
+            "close": float(close),
+            "volume": float((quote.get("volume") or [0])[i] or 0),
+        })
+    if not rows:
+        raise RuntimeError("Yahoo chart had no usable rows")
+    return pd.DataFrame(rows)
+
+
+def fetch_alpha_vantage_daily(symbol):
+    api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+    if not api_key:
+        raise RuntimeError("ALPHA_VANTAGE_API_KEY is not set")
+    url = (
+        "https://www.alphavantage.co/query"
+        f"?function=TIME_SERIES_DAILY&symbol={symbol}&outputsize=compact&apikey={api_key}"
+    )
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get("Note") or data.get("Information"):
+        raise RuntimeError(data.get("Note") or data.get("Information"))
+    series = data.get("Time Series (Daily)") or {}
+    rows = []
+    for day, vals in series.items():
+        rows.append({
+            "date": datetime.strptime(day, "%Y-%m-%d").date(),
+            "open": float(vals["1. open"]),
+            "high": float(vals["2. high"]),
+            "low": float(vals["3. low"]),
+            "close": float(vals["4. close"]),
+            "volume": float(vals["5. volume"]),
+        })
+    if not rows:
+        raise RuntimeError("Alpha Vantage returned no rows")
+    return pd.DataFrame(rows).sort_values("date")
+
+
+def _add_features(df):
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values("date").drop_duplicates(subset=["date"], keep="last")
+    df["H-L"] = df["high"] - df["low"]
+    df["O-C"] = df["open"] - df["close"]
+    df["7_DAYS_MA"] = df["close"].rolling(7).mean()
+    df["14_DAYS_MA"] = df["close"].rolling(14).mean()
+    df["21_DAYS_MA"] = df["close"].rolling(21).mean()
+    df["7_DAYS_STD_DEV"] = df["close"].rolling(7).std()
+    df["adj_close"] = df["close"]
+    df.ffill(inplace=True)
+    return df
+
+
 def update_stock_data(stock):
+    """Refresh CSV with live market data before forecasting."""
     if stock not in SUPPORTED_STOCKS:
         return {"error": f"Unsupported stock symbol: {stock}"}
 
     csv_file = os.path.join(DATA_DIR, f"stock_market_data_{stock}_4years.csv")
-
+    existing = pd.DataFrame()
     if os.path.exists(csv_file):
-        df = pd.read_csv(csv_file, parse_dates=["date"])
-        df["date"] = pd.to_datetime(df["date"])
-        last_date = df["date"].max().date()
-    else:
-        last_date = (datetime.today() - timedelta(days=4*365)).date()
-        df = pd.DataFrame()
+        existing = pd.read_csv(csv_file, parse_dates=["date"])
+        existing["date"] = pd.to_datetime(existing["date"])
 
-    today = datetime.today().date()
-
-    if last_date < today - timedelta(days=1):
+    fresh = None
+    source = None
+    try:
+        fresh = fetch_yahoo_chart_daily(stock, range_="2y")
+        source = "yahoo-chart"
+    except Exception as e:
+        print(f"⚠️ Yahoo chart update failed for {stock}: {e}")
         try:
-            new_data = yf.download(stock, start=last_date + timedelta(days=1), end=today, progress=False)
-        except Exception as e:
-            print(f"⚠️ Skipping live update for {stock} (using CSV): {e}")
-            return {"ok": True, "updated": False}
+            fresh = fetch_alpha_vantage_daily(stock)
+            source = "alphavantage"
+        except Exception as e2:
+            print(f"⚠️ Alpha Vantage update failed for {stock}: {e2}")
 
-        if new_data is None or new_data.empty:
-            print(f"⚠️ No new Yahoo data for {stock}; using existing CSV")
-            return {"ok": True, "updated": False}
+    if fresh is None or fresh.empty:
+        print(f"⚠️ No live update for {stock}; forecasting from existing CSV")
+        return {"ok": True, "updated": False, "source": "csv"}
 
-        new_data.reset_index(inplace=True)
-        new_data.rename(columns={"Date": "date", "High": "high", "Low": "low",
-                                 "Open": "open", "Close": "close", "Volume": "volume"}, inplace=True)
+    fresh["date"] = pd.to_datetime(fresh["date"])
+    if not existing.empty:
+        combined = pd.concat(
+            [existing[["date", "open", "high", "low", "close", "volume"]], fresh],
+            ignore_index=True,
+        )
+    else:
+        combined = fresh
 
-        new_data["H-L"] = new_data["high"] - new_data["low"]
-        new_data["O-C"] = new_data["open"] - new_data["close"]
-        new_data["7_DAYS_MA"] = new_data["close"].rolling(7).mean()
-        new_data["14_DAYS_MA"] = new_data["close"].rolling(14).mean()
-        new_data["21_DAYS_MA"] = new_data["close"].rolling(21).mean()
-        new_data["7_DAYS_STD_DEV"] = new_data["close"].rolling(7).std()
-        new_data.ffill(inplace=True)
-
-        new_data.to_csv(csv_file, mode="a", header=not os.path.exists(csv_file), index=False)
-        print(f"✅ Updated stock data for {stock}")
-        return {"ok": True, "updated": True}
-
-    print(f"✅ Stock data for {stock} already up to date")
-    return {"ok": True, "updated": False}
+    updated = _add_features(combined)
+    # Keep a stable column order for downstream models
+    cols = [
+        "date", "open", "high", "low", "close", "adj_close", "volume",
+        "H-L", "O-C", "7_DAYS_MA", "14_DAYS_MA", "21_DAYS_MA", "7_DAYS_STD_DEV",
+    ]
+    for c in cols:
+        if c not in updated.columns:
+            updated[c] = np.nan
+    updated[cols].to_csv(csv_file, index=False)
+    print(f"✅ Updated {stock} CSV from {source} through {updated['date'].max().date()}")
+    return {"ok": True, "updated": True, "source": source}
 
 class AttentionLayer(tf.keras.layers.Layer):
     def __init__(self, units, **kwargs):
