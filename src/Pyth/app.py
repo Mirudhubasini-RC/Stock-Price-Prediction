@@ -56,24 +56,34 @@ def update_stock_data(stock):
     today = datetime.today().date()
 
     if last_date < today - timedelta(days=1):
-        new_data = yf.download(stock, start=last_date + timedelta(days=1), end=today)
+        try:
+            new_data = yf.download(stock, start=last_date + timedelta(days=1), end=today, progress=False)
+        except Exception as e:
+            print(f"⚠️ Skipping live update for {stock} (using CSV): {e}")
+            return {"ok": True, "updated": False}
 
-        if not new_data.empty:
-            new_data.reset_index(inplace=True)
-            new_data.rename(columns={"Date": "date", "High": "high", "Low": "low",
-                                     "Open": "open", "Close": "close", "Volume": "volume"}, inplace=True)
+        if new_data is None or new_data.empty:
+            print(f"⚠️ No new Yahoo data for {stock}; using existing CSV")
+            return {"ok": True, "updated": False}
 
-            new_data["H-L"] = new_data["high"] - new_data["low"]
-            new_data["O-C"] = new_data["open"] - new_data["close"]
-            new_data["7_DAYS_MA"] = new_data["close"].rolling(7).mean()
-            new_data["14_DAYS_MA"] = new_data["close"].rolling(14).mean()
-            new_data["21_DAYS_MA"] = new_data["close"].rolling(21).mean()
-            new_data["7_DAYS_STD_DEV"] = new_data["close"].rolling(7).std()
-            new_data.ffill(inplace=True)  # ✅ Fixed
+        new_data.reset_index(inplace=True)
+        new_data.rename(columns={"Date": "date", "High": "high", "Low": "low",
+                                 "Open": "open", "Close": "close", "Volume": "volume"}, inplace=True)
 
-            new_data.to_csv(csv_file, mode="a", header=not os.path.exists(csv_file), index=False)
+        new_data["H-L"] = new_data["high"] - new_data["low"]
+        new_data["O-C"] = new_data["open"] - new_data["close"]
+        new_data["7_DAYS_MA"] = new_data["close"].rolling(7).mean()
+        new_data["14_DAYS_MA"] = new_data["close"].rolling(14).mean()
+        new_data["21_DAYS_MA"] = new_data["close"].rolling(21).mean()
+        new_data["7_DAYS_STD_DEV"] = new_data["close"].rolling(7).std()
+        new_data.ffill(inplace=True)
 
-    print(f"✅ Updated stock data for {stock}")
+        new_data.to_csv(csv_file, mode="a", header=not os.path.exists(csv_file), index=False)
+        print(f"✅ Updated stock data for {stock}")
+        return {"ok": True, "updated": True}
+
+    print(f"✅ Stock data for {stock} already up to date")
+    return {"ok": True, "updated": False}
 
 class AttentionLayer(tf.keras.layers.Layer):
     def __init__(self, units, **kwargs):
@@ -184,7 +194,7 @@ def perform_lstm_forecast(stock, horizon):
         if not all(col in df.columns for col in feature_columns):
             return {"error": "Missing required columns in CSV!"}
 
-        df.fillna(method="ffill", inplace=True)
+        df.ffill(inplace=True)
 
         available_days = df.shape[0]
         window_size = min(30, available_days)
@@ -271,6 +281,11 @@ def fetch_news_sentiment(stock):
 
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}
+
+
+@app.route("/", methods=["GET"])
+def health():
+    return jsonify({"status": "ok", "service": "ticker-trend-ml"})
 
 
 @app.route('/predict', methods=['POST'])
