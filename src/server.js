@@ -23,11 +23,11 @@ const DEFAULT_STOCKS = ['AAPL', 'AMD', 'AMZN', 'TSLA', 'META', 'FANG', 'UBER', '
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const YAHOO_GAP_MS = 1500;
 const YAHOO_COOLDOWN_MS = 15 * 60 * 1000; // stop calling Yahoo for 15 min after a 429
+const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY || '';
 
 const cache = new Map();
 let yahooQueue = Promise.resolve();
-// Start in local mode so deploy/demo works while Yahoo is rate-limited
-let yahooCooldownUntil = Date.now() + YAHOO_COOLDOWN_MS;
+let yahooCooldownUntil = 0; // try live sources first on deploy
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -115,6 +115,83 @@ function historicalFromCsv(symbol, timeframe) {
   }));
 }
 
+function stooqSymbol(symbol) {
+  // Stooq US equities use ticker.us (e.g. aapl.us)
+  return `${String(symbol).toLowerCase()}.us`;
+}
+
+async function fetchStooqHistory(symbol) {
+  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(stooqSymbol(symbol))}&i=d`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Stooq HTTP ${res.status}`);
+  const text = await res.text();
+  if (!text || /No data|Exceeded|forbidden/i.test(text)) {
+    throw new Error('Stooq returned no data');
+  }
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) throw new Error('Stooq empty history');
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const [date, open, high, low, close] = lines[i].split(',');
+    const o = parseFloat(open);
+    const h = parseFloat(high);
+    const l = parseFloat(low);
+    const c = parseFloat(close);
+    if (!date || Number.isNaN(c)) continue;
+    rows.push({ date, open: o, high: h, low: l, close: c });
+  }
+  if (!rows.length) throw new Error('Stooq parse failed');
+  return rows;
+}
+
+function sliceHistory(rows, timeframe) {
+  let count = 22;
+  if (timeframe === '1w') count = 5;
+  if (timeframe === '1y') count = 252;
+  return rows.slice(-count);
+}
+
+async function quoteFromStooq(symbol) {
+  const rows = await fetchStooqHistory(symbol);
+  if (rows.length < 2) throw new Error('Not enough Stooq rows');
+  const last = rows[rows.length - 1];
+  const prev = rows[rows.length - 2];
+  const changePct = prev.close ? (last.close - prev.close) / prev.close : 0;
+  return {
+    symbol,
+    companyName: symbol,
+    currentPrice: last.close,
+    previousClose: prev.close,
+    openPrice: last.open,
+    dayRange: `${last.low} - ${last.high}`,
+    volume: 'N/A',
+    percentChange: changePct,
+    price: last.close,
+    source: 'stooq',
+  };
+}
+
+async function fetchAlphaVantageActive() {
+  if (!ALPHA_VANTAGE_API_KEY) return null;
+  const url = `https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey=${ALPHA_VANTAGE_API_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Alpha Vantage HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.Note || data.Information) {
+    throw new Error(data.Note || data.Information);
+  }
+  const mapRow = (row) => ({
+    ticker: row.ticker,
+    price: parseFloat(row.price) || 0,
+    change: parseFloat(row.change_amount) || 0,
+    changePercent: parseFloat(String(row.change_percentage || '').replace('%', '')) || 0,
+  });
+  const gainers = (data.top_gainers || []).slice(0, 10).map(mapRow);
+  const losers = (data.top_losers || []).slice(0, 10).map(mapRow);
+  if (!gainers.length && !losers.length) return null;
+  return { gainers, losers, source: 'alphavantage' };
+}
+
 /** Run Yahoo calls one-at-a-time with a gap between them. */
 function enqueueYahoo(fn) {
   if (!yahooAvailable()) {
@@ -140,6 +217,7 @@ function mapQuoteToStock(symbol, quote) {
     volume: quote.regularMarketVolume ?? 'N/A',
     percentChange: quote.regularMarketChangePercent ?? 0,
     price: quote.regularMarketPrice ?? 'N/A',
+    source: 'yahoo',
   };
 }
 
@@ -183,21 +261,29 @@ async function fetchQuoteCached(symbol) {
   const hit = getCache(key);
   if (hit) return hit;
 
-  // Prefer local CSV / fallback while Yahoo is cooling down
-  if (!yahooAvailable()) {
-    return setCache(key, localQuote(symbol));
+  // 1) Yahoo (when not rate-limited)
+  if (yahooAvailable()) {
+    try {
+      const quote = await enqueueYahoo(() => yahooFinance.quote(symbol));
+      if (quote) return setCache(key, mapQuoteToStock(symbol, quote));
+    } catch (err) {
+      if (isRateLimited(err)) markYahooCooldown(symbol);
+      console.warn(`Yahoo quote failed for ${symbol}:`, err.message);
+    }
   }
 
+  // 2) Stooq (free, no API key) — good live daily prices
   try {
-    const quote = await enqueueYahoo(() => yahooFinance.quote(symbol));
-    if (!quote) throw new Error(`No quote for ${symbol}`);
-    return setCache(key, mapQuoteToStock(symbol, quote));
+    const stooq = await quoteFromStooq(symbol);
+    return setCache(key, stooq);
   } catch (err) {
-    if (isRateLimited(err)) markYahooCooldown(symbol);
-    const stale = getStaleCache(key);
-    if (stale) return stale;
-    return setCache(key, localQuote(symbol));
+    console.warn(`Stooq quote failed for ${symbol}:`, err.message);
   }
+
+  // 3) Local CSV / static fallback
+  const stale = getStaleCache(key);
+  if (stale) return stale;
+  return setCache(key, localQuote(symbol));
 }
 
 app.use(cors({
@@ -446,7 +532,15 @@ app.get('/api/stock/:symbol/historical', async (req, res) => {
   const cached = getCache(cacheKey);
   if (cached) return res.json(cached);
 
-  // Prefer local CSV so charts work even when Yahoo is blocked
+  // Stooq first for fresher charts (CSV in repo ends ~Apr 2025)
+  try {
+    const rows = await fetchStooqHistory(symbol);
+    const payload = sliceHistory(rows, timeframe);
+    if (payload.length) return res.json(setCache(cacheKey, payload));
+  } catch (err) {
+    console.warn(`Stooq history failed for ${symbol}:`, err.message);
+  }
+
   const local = historicalFromCsv(symbol, timeframe);
   if (local && local.length) {
     return res.json(setCache(cacheKey, local));
@@ -454,7 +548,7 @@ app.get('/api/stock/:symbol/historical', async (req, res) => {
 
   if (!yahooAvailable()) {
     return res.status(503).json({
-      error: 'No local history for this symbol and Yahoo is rate-limited. Try AAPL, AMZN, GOOG, ORCL, or RYCEY.',
+      error: 'No history available for this symbol right now.',
     });
   }
 
@@ -506,11 +600,7 @@ app.get('/api/stock/:symbol/historical', async (req, res) => {
     const stale = getStaleCache(cacheKey);
     if (stale) return res.json(stale);
     console.error('Error fetching historical data:', error.message || error);
-    return res.status(isRateLimited(error) ? 429 : 500).json({
-      error: isRateLimited(error)
-        ? 'Yahoo Finance rate limit hit. Try AAPL/AMZN/GOOG from local data.'
-        : 'Failed to fetch historical data',
-    });
+    return res.status(500).json({ error: 'Failed to fetch historical data' });
   }
 });
 
@@ -518,6 +608,14 @@ async function buildActiveStocks() {
   const cacheKey = 'active-stocks';
   const hit = getCache(cacheKey);
   if (hit) return hit;
+
+  // Alpha Vantage: one call for gainers + losers (uses your existing key)
+  try {
+    const av = await fetchAlphaVantageActive();
+    if (av) return setCache(cacheKey, av);
+  } catch (err) {
+    console.warn('Alpha Vantage active stocks failed:', err.message);
+  }
 
   if (!yahooAvailable()) {
     return setCache(cacheKey, FALLBACK_ACTIVE);
@@ -584,27 +682,16 @@ app.get('/api/active-stocks', async (req, res) => {
   }
 });
 
-/** One request for the whole dashboard — avoids parallel Yahoo bursts from the browser. */
+/** One request for the whole dashboard — Yahoo → Stooq → local CSV. */
 app.get('/api/market-overview', async (req, res) => {
   try {
-    // While rate-limited, serve local CSV / fallback instantly (no Yahoo calls)
-    if (!yahooAvailable()) {
-      return res.json({
-        marketData: DEFAULT_STOCKS.map((s) => localQuote(s)),
-        gainers: FALLBACK_ACTIVE.gainers,
-        losers: FALLBACK_ACTIVE.losers,
-        source: 'local',
-      });
-    }
-
     const marketData = [];
+    let source = 'mixed';
     for (const symbol of DEFAULT_STOCKS) {
-      if (!yahooAvailable()) {
-        marketData.push(localQuote(symbol));
-        continue;
-      }
       try {
-        marketData.push(await fetchQuoteCached(symbol));
+        const q = await fetchQuoteCached(symbol);
+        marketData.push(q);
+        if (q.source) source = q.source;
       } catch (err) {
         marketData.push(localQuote(symbol));
       }
@@ -614,7 +701,7 @@ app.get('/api/market-overview', async (req, res) => {
       marketData: marketData.length ? marketData : FALLBACK_MARKET,
       gainers: active.gainers,
       losers: active.losers,
-      source: yahooAvailable() ? 'yahoo' : 'local',
+      source: active.source || source,
     });
   } catch (error) {
     console.error('Error building market overview:', error.message);

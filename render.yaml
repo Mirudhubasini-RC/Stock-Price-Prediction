@@ -23,6 +23,8 @@ services:
         value: ""
       - key: REACT_APP_ML_API_URL
         sync: false
+      - key: ALPHA_VANTAGE_API_KEY
+        sync: false
       - key: DB_HOST
         sync: false
       - key: DB_USER
